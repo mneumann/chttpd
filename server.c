@@ -118,14 +118,14 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   assert(data->http_version == 10 || data->http_version == 11);
 
   if (data->http_version == 10) {
-    dbuf_append_str(out, "HTTP/1.0 OK 200\r\n");
+    dbuf_append_str(out, "HTTP/1.0 200 OK\r\n");
 
     if (keep_alive) {
       dbuf_append_str(out, "Connection: Keep-Alive\r\n");
     }
   }
   else if (data->http_version == 11) {
-    dbuf_append_str(out, "HTTP/1.1 OK 200\r\n");
+    dbuf_append_str(out, "HTTP/1.1 200 OK\r\n");
 
     if (!keep_alive) {
       dbuf_append_str(out, "Connection: Close\r\n");
