@@ -4193,3 +4193,32 @@ bool http_parser_has_error(const struct http_parser *parser) {
 bool http_parser_is_finished(const struct http_parser *parser) {
   return (parser->saved_cs >= http_parser_first_final);
 }
+
+bool http_is_keep_alive(struct http_parser_data *data) {
+  switch (data->http_version) {
+    case 10:
+      if (data->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
+      break;
+    case 11:
+      if (data->header_connection == HTTP_CONNECTION_CLOSE) return false;
+      break;
+    default:
+      assert(false);
+      return false;
+  };
+
+  switch (data->request_method) {
+    case HTTP_REQUEST_METHOD_HEAD:
+    case HTTP_REQUEST_METHOD_GET:
+      return true;
+      break;
+
+    case HTTP_REQUEST_METHOD_POST:
+    case HTTP_REQUEST_METHOD_PUT:
+      return (data->content_length >= 0);
+      break;
+    // XXX
+  };
+
+  return false;
+}

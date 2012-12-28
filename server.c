@@ -45,35 +45,6 @@ static void print_buffer(char *buffer, int buf_len, int buf_offset) {
   }
 }
 
-static bool is_keep_alive(struct http_parser_data *data) {
-  switch (data->http_version) {
-    case 10:
-      if (data->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
-      break;
-    case 11:
-      if (data->header_connection == HTTP_CONNECTION_CLOSE) return false;
-      break;
-    default:
-      assert(false);
-      return false;
-  };
-
-  switch (data->request_method) {
-    case HTTP_REQUEST_METHOD_HEAD:
-    case HTTP_REQUEST_METHOD_GET:
-      return true;
-      break;
-
-    case HTTP_REQUEST_METHOD_POST:
-    case HTTP_REQUEST_METHOD_PUT:
-      return (data->content_length >= 0);
-      break;
-    // XXX
-  };
-
-  return false;
-}
-
 void print_header(const char *header, struct byte_range r, char *buffer) {
   assert(r.from <= r.to);
 
@@ -131,7 +102,7 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
 
   //printf("Content-Length: %d\n", data->content_length);
 
-  bool keep_alive = is_keep_alive(data); 
+  bool keep_alive = http_is_keep_alive(data); 
 
   int content_length = data->content_length;
   if (content_length < 0) {
@@ -275,7 +246,7 @@ static void handle_connection(int sock)
 
   dbuf_free(&out);
 
-  printf("Closing socket\n");
+  //printf("Closing socket\n");
   close(sock);
 }
 

@@ -66,4 +66,6 @@ byte_pos http_parser_run(struct http_parser *parser,
 bool http_parser_has_error(const struct http_parser *parser);
 bool http_parser_is_finished(const struct http_parser *parser);
 
+bool http_is_keep_alive(struct http_parser_data *date);
+
 #endif
