@@ -19,6 +19,8 @@
 
 #include <sys/uio.h> // writev
 
+#include <queue>
+
 static void readn(int fd, char *buf, size_t n) {
   while (n > 0) {
     ssize_t c = read(fd, (void*)buf, n);
@@ -116,29 +118,29 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   assert(data->http_version == 10 || data->http_version == 11);
 
   if (data->http_version == 10) {
-    out[out_n].iov_base = "HTTP/1.0 OK 200\r\n";
-    out[out_n].iov_len = strlen(out[out_n].iov_base);
+    out[out_n].iov_base = (char*)"HTTP/1.0 OK 200\r\n";
+    out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
     ++out_n;
 
     if (keep_alive) {
-      out[out_n].iov_base = "Connection: Keep-Alive\r\n";
-      out[out_n].iov_len = strlen(out[out_n].iov_base);
+      out[out_n].iov_base = (char*)"Connection: Keep-Alive\r\n";
+      out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
       ++out_n;
     }
   }
   else if (data->http_version == 11) {
-    out[out_n].iov_base = "HTTP/1.1 OK 200\r\n";
-    out[out_n].iov_len = strlen(out[out_n].iov_base);
+    out[out_n].iov_base = (char*)"HTTP/1.1 OK 200\r\n";
+    out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
     ++out_n;
 
     if (!keep_alive) {
-      out[out_n].iov_base = "Connection: Close\r\n";
-      out[out_n].iov_len = strlen(out[out_n].iov_base);
+      out[out_n].iov_base = (char*)"Connection: Close\r\n";
+      out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
       ++out_n;
     }
   }
 
-  char *body = "123";
+  const char *body = "123";
   char content_length_header[32];
   int body_sz = strlen(body);
   int err = snprintf(content_length_header, 32, "Content-Length: %d\r\n", body_sz);
@@ -148,11 +150,11 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   out[out_n].iov_len = err; // should be string length!
   ++out_n;
 
-  out[out_n].iov_base = "Content-Type: text/ascii\r\n\r\n"; 
-  out[out_n].iov_len = strlen(out[out_n].iov_base); 
+  out[out_n].iov_base = (char*)"Content-Type: text/ascii\r\n\r\n"; 
+  out[out_n].iov_len = strlen((const char*)out[out_n].iov_base); 
   ++out_n;
 
-  out[out_n].iov_base = body; 
+  out[out_n].iov_base = (char*)body;
   out[out_n].iov_len = body_sz;
   ++out_n;
 
@@ -229,10 +231,10 @@ static void handle_connection(int sock)
       // should allocate new buffer!
       char *new_buf = NULL;
       if (buffer == stack_buffer) {
-        new_buf = malloc(buf_capacity*2);
+        new_buf = (char*)malloc(buf_capacity*2);
       }
       else {
-        new_buf = realloc(buffer, buf_capacity*2);
+        new_buf = (char*)realloc(buffer, buf_capacity*2);
       }
       assert(new_buf);
       buffer = new_buf;
@@ -259,32 +261,33 @@ static void handle_connection(int sock)
 
 struct thread_args {
   pthread_t thread;
-  int accept;
-  int fd;
+  pthread_mutex_t *shared_queue_mtx;
+  pthread_cond_t *shared_queue_signal;
+  std::queue<int> *shared_queue; // must hold mutex to access
 };
 
 static void *start_thread(void *args) {
   struct thread_args *ta = (struct thread_args*) args; 
 
-  if (ta->accept == 1) {
-    struct sockaddr_in cli_addr;
-    socklen_t clilen;
+  for (;;) {
+    int rc = pthread_mutex_lock(ta->shared_queue_mtx);
+    assert(rc == 0);
 
-    for (;;) {
-
-      /* Accept actual connection from the client */
-      int newsockfd = accept(ta->fd, (struct sockaddr *)&cli_addr, &clilen);
-      if (newsockfd < 0) 
-      {
-          perror("ERROR on accept");
-          exit(1);
-      }
-      handle_connection(newsockfd);
-
+    while (ta->shared_queue->empty()) {
+      rc = pthread_cond_wait(ta->shared_queue_signal, ta->shared_queue_mtx);
+      assert(rc == 0);
     }
-  }
-  else {
-    handle_connection(ta->fd);
+
+    assert(!ta->shared_queue->empty());
+
+    int socket = ta->shared_queue->front();
+    ta->shared_queue->pop();
+    rc = pthread_mutex_unlock(ta->shared_queue_mtx);
+    assert(rc == 0);
+
+    assert(socket >= 0);
+
+    handle_connection(socket);
   }
 
   return NULL;
@@ -292,15 +295,12 @@ static void *start_thread(void *args) {
 
 int main( int argc, char *argv[] )
 {
-  int sockfd, newsockfd, portno;
+  int sockfd, portno;
   struct sockaddr_in serv_addr, cli_addr;
   socklen_t clilen;
 
   portno = atoi(argv[1]);
-
-#if 0
   int nthreads = atoi(argv[2]);
-#endif
 
   /* First call to socket() function */
   sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -311,7 +311,6 @@ int main( int argc, char *argv[] )
   }
     /* Initialize socket structure */
     bzero((char *) &serv_addr, sizeof(serv_addr));
-    //portno = 5001;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
@@ -330,42 +329,41 @@ int main( int argc, char *argv[] )
     listen(sockfd, 100);
     clilen = sizeof(cli_addr);
 
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+    std::queue<int> queue;
 
-
-#if 0
     fprintf(stderr, "Spawning up %d threads\n", nthreads);
     struct thread_args *threads = (struct thread_args*) malloc(nthreads*sizeof(struct thread_args));
 
     for (int i = 0; i < nthreads; ++i) {
-      threads[i].fd = sockfd; 
-      threads[i].accept = 1;
+      threads[i].shared_queue = &queue;
+      threads[i].shared_queue_mtx = &mutex;
+      threads[i].shared_queue_signal = &cond;
       int ec = pthread_create(&threads[i].thread, NULL, start_thread, &threads[i]);
+      assert(ec == 0);
     }
-
     fprintf(stderr, "Done\n");
-#endif
 
     for (;;) {
-#if 0
-      sleep(1);
-#endif
-
-#if 1
-      /* Accept actual connection from the client */
-      newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, 
-                                  &clilen);
-      if (newsockfd < 0) 
+      int newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+      if (newsockfd < 0)
       {
           perror("ERROR on accept");
           exit(1);
       }
 
-      struct thread_args *ta = (struct thread_args*)malloc(sizeof(struct thread_args));
-      assert(ta);
-      ta->fd = newsockfd;
-      ta->accept = 0;
-      int ec = pthread_create(&ta->thread, NULL, start_thread, ta);
-#endif
+      // XXX: use bounded queue
+      int rc = pthread_mutex_lock(&mutex);
+      assert(rc == 0);
+
+      queue.push(newsockfd);
+
+      rc = pthread_mutex_unlock(&mutex);
+      assert(rc == 0);
+
+      rc = pthread_cond_signal(&cond);
+      assert(rc == 0);
     }
 
     return 0; 

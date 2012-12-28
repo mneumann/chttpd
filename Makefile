@@ -1,5 +1,5 @@
 server: server.c http_parser.c http_parser.h Makefile
-	gcc -o server -O2 -std=c99 -D_GNU_SOURCE server.c http_parser.c -pthread 
+	g++ -o server -O2 -D_GNU_SOURCE server.c http_parser.c -pthread 
 
 http_parser.o: http_parser.c http_parser.h Makefile
 	cc -c http_parser.c
