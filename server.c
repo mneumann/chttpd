@@ -20,6 +20,7 @@
 #include <sys/uio.h> // writev
 
 #include <queue>
+#include "dbuf.h"
 
 static void readn(int fd, char *buf, size_t n) {
   while (n > 0) {
@@ -62,40 +63,9 @@ void print_header(const char *header, struct byte_range r, char *buffer) {
   }
 }
 
-struct dbuf {
-  char *buf;
-  size_t capa;
-  size_t len;
-};
-
-void dbuf_init(struct dbuf* dbuf, size_t init_capa) {
-  dbuf->buf = (char*)malloc(init_capa);
-  dbuf->capa = init_capa;
-  dbuf->len = 0;
-}
-
-void dbuf_free(struct dbuf* dbuf) {
-  free(dbuf->buf);
-  dbuf->buf = NULL;
-}
-
-void dbuf_append(struct dbuf* dbuf, const void *data, size_t sz) {
-  assert(dbuf->len + sz <= dbuf->capa); // XXX: realloc
-  memcpy(dbuf->buf+dbuf->len, data, sz);
-  dbuf->len += sz;
-}
-
-void dbuf_append_str(struct dbuf* dbuf, const char *str) {
-  dbuf_append(dbuf, str, strlen(str));
-}
-
-void dbuf_reset(struct dbuf* dbuf) {
-  dbuf->len = 0;
-}
-
 // returns number of overflow bytes (they) 
 // return < 0 for not keep-alive
-int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, int sock, struct dbuf *out) {
+int parsing_done(struct http_parser_data *data, const char *buffer, byte_pos buf_len, int sock, DBuf &out) {
   //print_header("request_uri", data->request_uri, buffer);
   //print_header("request_method", data->request_method, buffer);
   //print_header("connection", data->header_connection, buffer);
@@ -118,17 +88,17 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   assert(data->http_version == 10 || data->http_version == 11);
 
   if (data->http_version == 10) {
-    dbuf_append_str(out, "HTTP/1.0 200 OK\r\n");
+    out << "HTTP/1.0 200 OK\r\n";
 
     if (keep_alive) {
-      dbuf_append_str(out, "Connection: Keep-Alive\r\n");
+      out << "Connection: Keep-Alive\r\n";
     }
   }
   else if (data->http_version == 11) {
-    dbuf_append_str(out, "HTTP/1.1 200 OK\r\n");
+    out << "HTTP/1.1 200 OK\r\n";
 
     if (!keep_alive) {
-      dbuf_append_str(out, "Connection: Close\r\n");
+      out << "Connection: Close\r\n";
     }
   }
 
@@ -138,9 +108,9 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   int err = snprintf(content_length_header, 32, "Content-Length: %d\r\n", body_sz);
   assert(err > 0 && err < 32);
 
-  dbuf_append(out, content_length_header, err);
-  dbuf_append_str(out, "Content-Type: text/ascii\r\n\r\n");
-  dbuf_append(out, body, body_sz); 
+  out.append(content_length_header, err);
+  out << "Content-Type: text/ascii\r\n\r\n";
+  out.append(body, body_sz); 
 
   int bytes_needed;
 
@@ -160,9 +130,9 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
     bytes_needed = -1;
   }
 
-  ssize_t res = write(sock, out->buf, out->len);
+  ssize_t res = write(sock, out.data(), out.size());
 
-  dbuf_reset(out);
+  out.reset();
 
   return bytes_needed;
 }
@@ -173,78 +143,52 @@ static void handle_connection(int sock)
   struct http_parser parser;
   http_parser_init(&parser);
 
-  byte_pos buf_capacity = 4096;
-  char stack_buffer[4096];
-  byte_pos buf_len = 0;
   byte_pos buf_offset = 0;
-  char *buffer = stack_buffer; //(char*) malloc(buf_capacity);
-  assert(buffer);
 
-  dbuf out;
-  dbuf_init(&out, 10000);
+  DBuf buf(4096);
+  DBuf out(10000);
 
   for (;;) {
-    assert(buf_len <= buf_capacity);
-
-    buf_offset = http_parser_run(&parser, buffer, buf_len, buf_offset); 
+    buf_offset = http_parser_run(&parser, (const char*)buf.data(), buf.size(), buf_offset); 
 
     if (http_parser_has_error(&parser)) {
       printf("Invalid HTTP----------------------------------------------\n");
-      print_buffer(buffer, buf_len, buf_offset);
+      //print_buffer(buffer, buf_len, buf_offset);
       fprintf(stderr, "Invalid HTTP. Aborting\n");
       break;
     }
 
     if (http_parser_is_finished(&parser)) {
       //printf("HTTP parsing done\n");
-      const int read_too_much = parsing_done(&parser.data, buffer, buf_len, sock, &out);
+      const int read_too_much = parsing_done(&parser.data, (const char*)buf.data(), buf.size(), sock, out);
       if (read_too_much < 0) {
         // connection close
         break;
       }
       else {
         if (read_too_much > 0) {
-          memmove(buffer, buffer+(buf_len-read_too_much), read_too_much);
+          assert(read_too_much < buf.size());
+          buf.shift_left(buf.size() - read_too_much); 
+        } else {
+          buf.reset();
         }
 
-        buf_len = read_too_much;
         buf_offset = 0;
         http_parser_init(&parser);
         continue;
- 
       }
     }
 
-    if (buf_len == buf_capacity) {
-      fprintf(stderr, "realloc\n");
-      // should allocate new buffer!
-      char *new_buf = NULL;
-      if (buffer == stack_buffer) {
-        new_buf = (char*)malloc(buf_capacity*2);
-      }
-      else {
-        new_buf = (char*)realloc(buffer, buf_capacity*2);
-      }
-      assert(new_buf);
-      buffer = new_buf;
-      buf_capacity *= 2;
-    }
+    buf.resize_if_full();
 
-    ssize_t cnt = read(sock, (void*)(buffer+buf_len), buf_capacity-buf_len);
+    ssize_t cnt = read(sock, buf.end_ptr(), buf.free_capa());
     if (cnt < 0) {
       perror("ERROR reading from socket");
     }
+    buf.increase_size(cnt);
 
     if (cnt == 0) continue;
-
-    buf_len += cnt;
   }
-
-  if (buffer != stack_buffer) {
-    free(buffer);
-  }
-
-  dbuf_free(&out);
 
   //printf("Closing socket\n");
   close(sock);
