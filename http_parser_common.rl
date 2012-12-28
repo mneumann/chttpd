@@ -36,21 +36,23 @@
   Request_URI = ( "*" | absolute_uri | absolute_path ) >mark %request_uri;
   Fragment = ( uchar | reserved )* >mark %fragment;
 
-  Method = 
-           # HTTP/1.0
-           ("GET" %request_method_get) |
-           ("POST" %request_method_post) |
-           ("HEAD" %request_method_head) |
+  KnownMethod = 
+         # HTTP/1.0
+           ("GET" %request_method_get)
+         | ("POST" %request_method_post)
+         | ("HEAD" %request_method_head)
            
            # HTTP/1.1
-           ("OPTIONS" %request_method_options) |
-           ("PUT" %request_method_put) |
-           ("DELETE" %request_method_delete) |
-           ("TRACE" %request_method_trace) |
-           ("CONNECT" %request_method_connect) | 
+         | ("OPTIONS" %request_method_options)
+         | ("PUT" %request_method_put)
+         | ("DELETE" %request_method_delete)
+         | ("TRACE" %request_method_trace)
+         | ("CONNECT" %request_method_connect)
+         ;
 
-           # Whatever?
-           ( ( upper | digit | safe ){1,20} >mark %request_method_other );
+  OtherMethod = (( upper | digit | safe ){1,20} - KnownMethod) >mark %request_method_other;
+
+  Method = KnownMethod | OtherMethod;
 
   # We only support 1.0 and 1.1, so make it explicit
   HTTP_Version = ("HTTP/1.0" %http_version_10 ) |
@@ -80,11 +82,14 @@
         | ("Connection"i field_delim (
                ("Close"i %header_connection_close)
              | ("Keep-Alive"i %header_connection_keep_alive)
-             | (field_value) # XXX: we ignore all other values here as we are not interested
+             | (field_value - "Close"i - "Keep-Alive"i) # XXX: we ignore all other values here as we are not interested
              )
           )
 
-        | (field_name field_delim field_value %header);
+        | (
+            (field_name - "Content-Length"i - "Content-Type"i - "Date"i - "Host"i - "User-Agent"i - "Referer"i
+             - "Cookie"i - "Connection"i) 
+            field_delim field_value %header);
 
 #        | ("Accept"i field_delim field_value %field_accept)
 #        | ("Accept-Charset"i field_delim field_value %field_accept_charset)

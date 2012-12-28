@@ -54,6 +54,7 @@ static bool is_keep_alive(struct http_parser_data *data) {
       if (data->header_connection == HTTP_CONNECTION_CLOSE) return false;
       break;
     default:
+      assert(false);
       return false;
   };
 
@@ -90,9 +91,40 @@ void print_header(const char *header, struct byte_range r, char *buffer) {
   }
 }
 
+struct dbuf {
+  char *buf;
+  size_t capa;
+  size_t len;
+};
+
+void dbuf_init(struct dbuf* dbuf, size_t init_capa) {
+  dbuf->buf = (char*)malloc(init_capa);
+  dbuf->capa = init_capa;
+  dbuf->len = 0;
+}
+
+void dbuf_free(struct dbuf* dbuf) {
+  free(dbuf->buf);
+  dbuf->buf = NULL;
+}
+
+void dbuf_append(struct dbuf* dbuf, const void *data, size_t sz) {
+  assert(dbuf->len + sz <= dbuf->capa); // XXX: realloc
+  memcpy(dbuf->buf+dbuf->len, data, sz);
+  dbuf->len += sz;
+}
+
+void dbuf_append_str(struct dbuf* dbuf, const char *str) {
+  dbuf_append(dbuf, str, strlen(str));
+}
+
+void dbuf_reset(struct dbuf* dbuf) {
+  dbuf->len = 0;
+}
+
 // returns number of overflow bytes (they) 
 // return < 0 for not keep-alive
-int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, int sock) {
+int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, int sock, struct dbuf *out) {
   //print_header("request_uri", data->request_uri, buffer);
   //print_header("request_method", data->request_method, buffer);
   //print_header("connection", data->header_connection, buffer);
@@ -112,31 +144,20 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   // [0, 1, 2]
   int num_bytes_in_buffer = buf_len - data->body_start;
 
-  struct iovec out[10];
-  int out_n = 0;
-
   assert(data->http_version == 10 || data->http_version == 11);
 
   if (data->http_version == 10) {
-    out[out_n].iov_base = (char*)"HTTP/1.0 OK 200\r\n";
-    out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
-    ++out_n;
+    dbuf_append_str(out, "HTTP/1.0 OK 200\r\n");
 
     if (keep_alive) {
-      out[out_n].iov_base = (char*)"Connection: Keep-Alive\r\n";
-      out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
-      ++out_n;
+      dbuf_append_str(out, "Connection: Keep-Alive\r\n");
     }
   }
   else if (data->http_version == 11) {
-    out[out_n].iov_base = (char*)"HTTP/1.1 OK 200\r\n";
-    out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
-    ++out_n;
+    dbuf_append_str(out, "HTTP/1.1 OK 200\r\n");
 
     if (!keep_alive) {
-      out[out_n].iov_base = (char*)"Connection: Close\r\n";
-      out[out_n].iov_len = strlen((const char*)out[out_n].iov_base);
-      ++out_n;
+      dbuf_append_str(out, "Connection: Close\r\n");
     }
   }
 
@@ -146,17 +167,9 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   int err = snprintf(content_length_header, 32, "Content-Length: %d\r\n", body_sz);
   assert(err > 0 && err < 32);
 
-  out[out_n].iov_base = content_length_header; 
-  out[out_n].iov_len = err; // should be string length!
-  ++out_n;
-
-  out[out_n].iov_base = (char*)"Content-Type: text/ascii\r\n\r\n"; 
-  out[out_n].iov_len = strlen((const char*)out[out_n].iov_base); 
-  ++out_n;
-
-  out[out_n].iov_base = (char*)body;
-  out[out_n].iov_len = body_sz;
-  ++out_n;
+  dbuf_append(out, content_length_header, err);
+  dbuf_append_str(out, "Content-Type: text/ascii\r\n\r\n");
+  dbuf_append(out, body, body_sz); 
 
   int bytes_needed;
 
@@ -176,7 +189,9 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
     bytes_needed = -1;
   }
 
-  ssize_t res = writev(sock, out, out_n);
+  ssize_t res = write(sock, out->buf, out->len);
+
+  dbuf_reset(out);
 
   return bytes_needed;
 }
@@ -194,6 +209,9 @@ static void handle_connection(int sock)
   char *buffer = stack_buffer; //(char*) malloc(buf_capacity);
   assert(buffer);
 
+  dbuf out;
+  dbuf_init(&out, 10000);
+
   for (;;) {
     assert(buf_len <= buf_capacity);
 
@@ -208,7 +226,7 @@ static void handle_connection(int sock)
 
     if (http_parser_is_finished(&parser)) {
       //printf("HTTP parsing done\n");
-      const int read_too_much = parsing_done(&parser.data, buffer, buf_len, sock);
+      const int read_too_much = parsing_done(&parser.data, buffer, buf_len, sock, &out);
       if (read_too_much < 0) {
         // connection close
         break;
@@ -255,7 +273,9 @@ static void handle_connection(int sock)
     free(buffer);
   }
 
-  //printf("Closing socket\n");
+  dbuf_free(&out);
+
+  printf("Closing socket\n");
   close(sock);
 }
 
