@@ -118,14 +118,18 @@ void http_parser_init(struct http_parser *parser) {
 
 byte_pos http_parser_run(struct http_parser *parser,
                          const char *buffer, byte_pos buffer_length, byte_pos buffer_offset) {
+
   assert(parser);
   assert(buffer);
+
+  if (buffer_length == 0) return 0;
+
   assert(buffer_length > 0);
   assert(buffer_offset < buffer_length);
 
   // Ragel uses: cs, p, pe
   int cs = parser->saved_cs;               // current ragel machine state
-  const char *p = buffer;                  // pointer to start of data
+  const char *p = buffer + buffer_offset;  // pointer to start of data
   const char *pe = buffer + buffer_length; // pointer to end of data
 
   %% write exec;
@@ -134,7 +138,7 @@ byte_pos http_parser_run(struct http_parser *parser,
 
   parser->saved_cs = cs;
 
-  return (p - buffer); // returns the number of bytes consumed
+  return (p - buffer); // returns the new buffer offset
 }
 
 bool http_parser_has_error(const struct http_parser *parser) {
