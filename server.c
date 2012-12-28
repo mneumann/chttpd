@@ -17,6 +17,8 @@
 
 #include <string.h> // memcpy, strlen
 
+#include <sys/uio.h> // writev
+
 static void readn(int fd, char *buf, size_t n) {
   while (n > 0) {
     ssize_t c = read(fd, (void*)buf, n);
@@ -29,7 +31,8 @@ static void readn(int fd, char *buf, size_t n) {
     buf += c;
   }
 }
-void print_buffer(char *buffer, int buf_len, int buf_offset) {
+
+static void print_buffer(char *buffer, int buf_len, int buf_offset) {
   if (buf_len > 0) {
     char c = buffer[buf_len-1];
     buffer[buf_len-1] = '\0';
@@ -40,16 +43,35 @@ void print_buffer(char *buffer, int buf_len, int buf_offset) {
   }
 }
 
-bool is_connection_close(const char *buffer, struct http_parser_data *data) {
-  struct byte_pos_range r = data->header_connection;
-  if (r.from < 0 || r.to < 0) return false;
-  assert(r.from <= r.to);
-  if (r.from - r.to != 5) return false;
-  if (strncasecmp(buffer+r.from, "Close", 5) == 0) return true;
+static bool is_keep_alive(struct http_parser_data *data) {
+  switch (data->http_version) {
+    case 10:
+      if (data->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
+      break;
+    case 11:
+      if (data->header_connection == HTTP_CONNECTION_CLOSE) return false;
+      break;
+    default:
+      return false;
+  };
+
+  switch (data->request_method) {
+    case HTTP_REQUEST_METHOD_HEAD:
+    case HTTP_REQUEST_METHOD_GET:
+      return true;
+      break;
+
+    case HTTP_REQUEST_METHOD_POST:
+    case HTTP_REQUEST_METHOD_PUT:
+      return (data->content_length >= 0);
+      break;
+    // XXX
+  };
+
   return false;
 }
 
-void print_header(const char *header, struct byte_pos_range r, char *buffer) {
+void print_header(const char *header, struct byte_range r, char *buffer) {
   assert(r.from <= r.to);
 
   if (r.from < 0 || r.to < 0) {
@@ -75,27 +97,12 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
 
   //printf("Content-Length: %d\n", data->content_length);
 
-  //printf("parsing_done BUFFER\n");
-  //print_buffer(buffer, buf_len, 0);
-  //printf("--->\n\n\n");
+  bool keep_alive = is_keep_alive(data); 
 
-
-  bool keep_alive = true; 
-
-  // if HTTP_VERSION = 1.0, there must be a Connection: Keep-alive 
-  if (is_connection_close(buffer, data)) {
-    //printf("Connection: close\n");
-    keep_alive = false;
+  int content_length = data->content_length;
+  if (content_length < 0) {
+    content_length = 0;
   }
-  //keep_alive = false;
-  // only close conection if content_length is not specified for a http_method != GET 
-  //if (data->content_length < 0) {
-    //printf("Content-length not specified\n");
-    //keep_alive = false;
-  //}
-
-  // XXX
-  int content_length = 0;
 
   assert(data->body_start >= 0);
   assert(buf_len >= data->body_start);
@@ -103,17 +110,56 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
   // [0, 1, 2]
   int num_bytes_in_buffer = buf_len - data->body_start;
 
-  if (!keep_alive) {
-    const char *str = "HTTP/1.1 OK 200\r\nContent-Type: text/html\r\nContent-Length: 39\r\n\r\n<html><body><b>Hallo</b></body></html>";
-    const int sz = strlen(str);
-    ssize_t res = write(sock, str, sz);
+  struct iovec out[10];
+  int out_n = 0;
 
-    return -1;
+  assert(data->http_version == 10 || data->http_version == 11);
+
+  if (data->http_version == 10) {
+    out[out_n].iov_base = "HTTP/1.0 OK 200\r\n";
+    out[out_n].iov_len = strlen(out[out_n].iov_base);
+    ++out_n;
+
+    if (keep_alive) {
+      out[out_n].iov_base = "Connection: Keep-Alive\r\n";
+      out[out_n].iov_len = strlen(out[out_n].iov_base);
+      ++out_n;
+    }
+  }
+  else if (data->http_version == 11) {
+    out[out_n].iov_base = "HTTP/1.1 OK 200\r\n";
+    out[out_n].iov_len = strlen(out[out_n].iov_base);
+    ++out_n;
+
+    if (!keep_alive) {
+      out[out_n].iov_base = "Connection: Close\r\n";
+      out[out_n].iov_len = strlen(out[out_n].iov_base);
+      ++out_n;
+    }
   }
 
+  char *body = "123";
+  char content_length_header[32];
+  int body_sz = strlen(body);
+  int err = snprintf(content_length_header, 32, "Content-Length: %d\r\n", body_sz);
+  assert(err > 0 && err < 32);
+
+  out[out_n].iov_base = content_length_header; 
+  out[out_n].iov_len = err; // should be string length!
+  ++out_n;
+
+  out[out_n].iov_base = "Content-Type: text/ascii\r\n\r\n"; 
+  out[out_n].iov_len = strlen(out[out_n].iov_base); 
+  ++out_n;
+
+  out[out_n].iov_base = body; 
+  out[out_n].iov_len = body_sz;
+  ++out_n;
+
+  int bytes_needed;
+
   if (keep_alive) {
-    //printf("Keep alive\n");
-    int bytes_needed = content_length - num_bytes_in_buffer;
+    bytes_needed = content_length - num_bytes_in_buffer;
 
     if (bytes_needed > 0) {
       char *body_buf = (char*) malloc(bytes_needed); // XXX: alloc buf that holds whole body!
@@ -122,14 +168,15 @@ int parsing_done(struct http_parser_data *data, char *buffer, byte_pos buf_len, 
       bytes_needed = 0;
       free(body_buf);
     }
-
-    //const char *str = "HTTP/1.1 OK 200\r\nContent-Type: text/html\r\nContent-Length: 38\r\n\r\n<html><body><b>Hallo</b></body></html>";
-    const char *str = "HTTP/1.0 OK 200\r\nConnection: Keep-Alive\r\nContent-Type: text/ascii\r\nContent-Length: 3\r\n\r\n123";
-    const int sz = strlen(str);
-    ssize_t res = write(sock, str, sz);
-
-    return -bytes_needed;
+    bytes_needed = -bytes_needed;
+  } else {
+    // means, close connection
+    bytes_needed = -1;
   }
+
+  ssize_t res = writev(sock, out, out_n);
+
+  return bytes_needed;
 }
 
 

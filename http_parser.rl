@@ -18,8 +18,22 @@
 
   action request_uri { ASSIGN_FIELD(request_uri, fpc); }
   action fragment { ASSIGN_FIELD(fragment, fpc); }
-  action request_method { ASSIGN_FIELD(request_method, fpc); }
-  action http_version {	ASSIGN_FIELD(http_version, fpc); }
+
+  action request_method_get { parser->data.request_method = HTTP_REQUEST_METHOD_GET; }
+  action request_method_post { parser->data.request_method = HTTP_REQUEST_METHOD_POST; }
+  action request_method_head { parser->data.request_method = HTTP_REQUEST_METHOD_HEAD; }
+  action request_method_options { parser->data.request_method = HTTP_REQUEST_METHOD_OPTIONS; }
+  action request_method_put { parser->data.request_method = HTTP_REQUEST_METHOD_PUT; }
+  action request_method_delete { parser->data.request_method = HTTP_REQUEST_METHOD_DELETE; }
+  action request_method_trace { parser->data.request_method = HTTP_REQUEST_METHOD_TRACE; }
+  action request_method_connect { parser->data.request_method = HTTP_REQUEST_METHOD_CONNECT; }
+  action request_method_other {
+    parser->data.request_method = HTTP_REQUEST_METHOD_OTHER;
+    ASSIGN_FIELD(request_method_other, fpc);
+  }
+
+  action http_version_10 {	parser->data.http_version = 10; }
+  action http_version_11 {	parser->data.http_version = 11; }
   action request_path { ASSIGN_FIELD(request_path, fpc); }
 
   action query {
@@ -50,7 +64,9 @@
   action header_user_agent { ASSIGN_FIELD(header_user_agent, fpc); }
   action header_referer { ASSIGN_FIELD(header_referer, fpc); }
   action header_cookie { ASSIGN_FIELD(header_cookie, fpc); }
-  action header_connection { ASSIGN_FIELD(header_connection, fpc); }
+
+  action header_connection_close { parser->data.header_connection = HTTP_CONNECTION_CLOSE; }
+  action header_connection_keep_alive { parser->data.header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
 
   action field_name {
     parser->field_name.from = parser->mark;
@@ -88,12 +104,14 @@ static void http_parser_data_init(struct http_parser_data *data) {
 
   INIT_RANGE(request_uri);
   INIT_RANGE(fragment);
-  INIT_RANGE(request_method);
-  INIT_RANGE(http_version);
+  INIT_RANGE(request_method_other);
   INIT_RANGE(request_path);
   INIT_RANGE(query);
 
   data->content_length = -1;
+  data->http_version = -1;
+  data->request_method = -1;
+  data->header_connection = -1;
 
   INIT_RANGE(header_content_type);
   INIT_RANGE(header_date);
@@ -101,7 +119,6 @@ static void http_parser_data_init(struct http_parser_data *data) {
   INIT_RANGE(header_user_agent);
   INIT_RANGE(header_referer);
   INIT_RANGE(header_cookie);
-  INIT_RANGE(header_connection);
 
   data->body_start = -1;
 

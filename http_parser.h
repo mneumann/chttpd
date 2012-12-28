@@ -5,27 +5,45 @@
 #include <stdbool.h>
 
 typedef int32_t byte_pos;
-struct byte_pos_range { byte_pos from, to; };
+struct byte_range { byte_pos from, to; };
+
+#define HTTP_REQUEST_METHOD_GET 1
+#define HTTP_REQUEST_METHOD_POST 2
+#define HTTP_REQUEST_METHOD_HEAD 3
+#define HTTP_REQUEST_METHOD_OPTIONS 4
+#define HTTP_REQUEST_METHOD_PUT 5
+#define HTTP_REQUEST_METHOD_DELETE 6
+#define HTTP_REQUEST_METHOD_TRACE 7
+#define HTTP_REQUEST_METHOD_CONNECT 8
+#define HTTP_REQUEST_METHOD_OTHER 100 
+
+#define HTTP_CONNECTION_CLOSE 1
+#define HTTP_CONNECTION_KEEP_ALIVE 2
+
 
 /*
  * User visible data
  */
 struct http_parser_data {
-  struct byte_pos_range request_uri;
-  struct byte_pos_range fragment;
-  struct byte_pos_range request_method;
-  struct byte_pos_range http_version;
-  struct byte_pos_range request_path;
-  struct byte_pos_range query;
+  struct byte_range request_uri;
+  struct byte_range fragment;
+  struct byte_range request_path;
+  struct byte_range query;
+
+  int32_t http_version; // XXX: use signed char?
+
+  int32_t request_method; // XXX: use signed char?
+  int32_t header_connection; // XXX: use signed char?
+
+  struct byte_range request_method_other;
 
   int32_t content_length;
-  struct byte_pos_range header_content_type;
-  struct byte_pos_range header_date;
-  struct byte_pos_range header_host;
-  struct byte_pos_range header_user_agent;
-  struct byte_pos_range header_referer;
-  struct byte_pos_range header_cookie;
-  struct byte_pos_range header_connection;
+  struct byte_range header_content_type;
+  struct byte_range header_date;
+  struct byte_range header_host;
+  struct byte_range header_user_agent;
+  struct byte_range header_referer;
+  struct byte_range header_cookie;
 
   byte_pos body_start;
 };
@@ -35,7 +53,7 @@ struct http_parser {
 
   byte_pos mark;
   byte_pos mark_query;
-  struct byte_pos_range field_name;
+  struct byte_range field_name;
 
   struct http_parser_data data;
 };

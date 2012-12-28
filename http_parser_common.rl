@@ -35,10 +35,30 @@
 
   Request_URI = ( "*" | absolute_uri | absolute_path ) >mark %request_uri;
   Fragment = ( uchar | reserved )* >mark %fragment;
-  Method = ( upper | digit | safe ){1,20} >mark %request_method;
 
-  http_number = ( digit+ "." digit+ ) ;
-  HTTP_Version = ( "HTTP/" http_number ) >mark %http_version ;
+  Method = 
+           # HTTP/1.0
+           ("GET" %request_method_get) |
+           ("POST" %request_method_post) |
+           ("HEAD" %request_method_head) |
+           
+           # HTTP/1.1
+           ("OPTIONS" %request_method_options) |
+           ("PUT" %request_method_put) |
+           ("DELETE" %request_method_delete) |
+           ("TRACE" %request_method_trace) |
+           ("CONNECT" %request_method_connect) | 
+
+           # Whatever?
+           ( ( upper | digit | safe ){1,20} >mark %request_method_other );
+
+  # We only support 1.0 and 1.1, so make it explicit
+  HTTP_Version = ("HTTP/1.0" %http_version_10 ) |
+                 ("HTTP/1.1" %http_version_11 ) ;
+
+  #http_number = ( digit+ "." digit+ ) ;
+  #HTTP_Version = ( "HTTP/" http_number ) >mark %http_version ;
+
   Request_Line = ( Method " " Request_URI ("#" Fragment){0,1} " " HTTP_Version CRLF ) ;
 
   field_name = ( token -- ":" )+ >mark %field_name;
@@ -56,7 +76,13 @@
         | ("User-Agent"i field_delim field_value %header_user_agent)
         | ("Referer"i field_delim field_value %header_referer)
         | ("Cookie"i field_delim field_value %header_cookie)
-        | ("Connection"i field_delim field_value %header_connection)
+
+        | ("Connection"i field_delim (
+               ("Close"i %header_connection_close)
+             | ("Keep-Alive"i %header_connection_keep_alive)
+             | (field_value) # XXX: we ignore all other values here as we are not interested
+             )
+          )
 
         | (field_name field_delim field_value %header);
 

@@ -7,5 +7,5 @@ http_parser.o: http_parser.c http_parser.h Makefile
 main: main.c
 	gcc  -D_GNU_SOURCE -I../../libuv/include -L../../libuv main.c -luv -pthread -lrt
 
-http_parser.c: http_parser.rl Makefile
+http_parser.c: http_parser.rl http_parser_common.rl Makefile
 	ragel -G2 -C http_parser.rl
