@@ -31,13 +31,13 @@ static const int http_parser_en_main = 1;
 #include <assert.h>
 
 #define ASSIGN_FIELD(field, fpc) \
-  parser->data.field.from = parser->mark; \
-  parser->data.field.to = (byte_pos)(fpc - buffer);
+  req->field.from = parser->mark; \
+  req->field.to = (byte_pos)(fpc - buffer);
 
-static void http_parser_data_init(struct http_parser_data *data) {
+void http_request_init(struct http_request *req) {
   #define INIT_RANGE(field) \
-    data->field.from = -1;  \
-    data->field.to = -1;
+    req->field.from = -1;  \
+    req->field.to = -1;
 
   INIT_RANGE(request_uri);
   INIT_RANGE(fragment);
@@ -45,10 +45,10 @@ static void http_parser_data_init(struct http_parser_data *data) {
   INIT_RANGE(request_path);
   INIT_RANGE(query);
 
-  data->content_length = -1;
-  data->http_version = -1;
-  data->request_method = -1;
-  data->header_connection = -1;
+  req->content_length = -1;
+  req->http_version = -1;
+  req->request_method = -1;
+  req->header_connection = -1;
 
   INIT_RANGE(header_content_type);
   INIT_RANGE(header_date);
@@ -57,7 +57,7 @@ static void http_parser_data_init(struct http_parser_data *data) {
   INIT_RANGE(header_referer);
   INIT_RANGE(header_cookie);
 
-  data->body_start = -1;
+  req->body_start = -1;
 
   #undef INIT_RANGE
 }
@@ -72,11 +72,9 @@ void http_parser_init(struct http_parser *parser) {
 
 #line 131 "http_parser.rl"
   parser->saved_cs = cs;
-
-  http_parser_data_init(&parser->data);
 }
 
-byte_pos http_parser_run(struct http_parser *parser,
+byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
                          const char *buffer, byte_pos buffer_length, byte_pos buffer_offset) {
 
   assert(parser);
@@ -93,7 +91,7 @@ byte_pos http_parser_run(struct http_parser *parser,
   const char *pe = buffer + buffer_length; // pointer to end of data
 
   
-#line 97 "http_parser.c"
+#line 95 "http_parser.c"
 	{
 	if ( p == pe )
 		goto _test_eof;
@@ -131,7 +129,7 @@ st2:
 	if ( ++p == pe )
 		goto _test_eof2;
 case 2:
-#line 135 "http_parser.c"
+#line 133 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -149,47 +147,47 @@ case 2:
 tr9:
 #line 30 "http_parser.rl"
 	{
-    parser->data.request_method = HTTP_REQUEST_METHOD_OTHER;
+    req->request_method = HTTP_REQUEST_METHOD_OTHER;
     ASSIGN_FIELD(request_method_other, p);
   }
 	goto st3;
 tr211:
 #line 29 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_CONNECT; }
+	{ req->request_method = HTTP_REQUEST_METHOD_CONNECT; }
 	goto st3;
 tr217:
 #line 27 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_DELETE; }
+	{ req->request_method = HTTP_REQUEST_METHOD_DELETE; }
 	goto st3;
 tr220:
 #line 22 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_GET; }
+	{ req->request_method = HTTP_REQUEST_METHOD_GET; }
 	goto st3;
 tr224:
 #line 24 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_HEAD; }
+	{ req->request_method = HTTP_REQUEST_METHOD_HEAD; }
 	goto st3;
 tr231:
 #line 25 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_OPTIONS; }
+	{ req->request_method = HTTP_REQUEST_METHOD_OPTIONS; }
 	goto st3;
 tr236:
 #line 23 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_POST; }
+	{ req->request_method = HTTP_REQUEST_METHOD_POST; }
 	goto st3;
 tr238:
 #line 26 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_PUT; }
+	{ req->request_method = HTTP_REQUEST_METHOD_PUT; }
 	goto st3;
 tr243:
 #line 28 "http_parser.rl"
-	{ parser->data.request_method = HTTP_REQUEST_METHOD_TRACE; }
+	{ req->request_method = HTTP_REQUEST_METHOD_TRACE; }
 	goto st3;
 st3:
 	if ( ++p == pe )
 		goto _test_eof3;
 case 3:
-#line 193 "http_parser.c"
+#line 191 "http_parser.c"
 	switch( (*p) ) {
 		case 42: goto tr11;
 		case 43: goto tr12;
@@ -213,7 +211,7 @@ st4:
 	if ( ++p == pe )
 		goto _test_eof4;
 case 4:
-#line 217 "http_parser.c"
+#line 215 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr15;
 		case 35: goto tr16;
@@ -244,8 +242,8 @@ tr179:
 	{ parser->mark_query = (byte_pos)(p - buffer); }
 #line 39 "http_parser.rl"
 	{
-    parser->data.query.from = parser->mark_query;
-    parser->data.query.to = (byte_pos)(p - buffer);
+    req->query.from = parser->mark_query;
+    req->query.to = (byte_pos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -253,8 +251,8 @@ tr179:
 tr183:
 #line 39 "http_parser.rl"
 	{
-    parser->data.query.from = parser->mark_query;
-    parser->data.query.to = (byte_pos)(p - buffer);
+    req->query.from = parser->mark_query;
+    req->query.to = (byte_pos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -263,7 +261,7 @@ st5:
 	if ( ++p == pe )
 		goto _test_eof5;
 case 5:
-#line 267 "http_parser.c"
+#line 265 "http_parser.c"
 	if ( (*p) == 72 )
 		goto st6;
 	goto st0;
@@ -331,7 +329,7 @@ tr56:
 	goto st14;
 tr26:
 #line 35 "http_parser.rl"
-	{	parser->data.http_version = 10; }
+	{	req->http_version = 10; }
 	goto st14;
 tr39:
 #line 16 "http_parser.rl"
@@ -351,11 +349,11 @@ tr42:
 	goto st14;
 tr66:
 #line 68 "http_parser.rl"
-	{ parser->data.header_connection = HTTP_CONNECTION_CLOSE; }
+	{ req->header_connection = HTTP_CONNECTION_CLOSE; }
 	goto st14;
 tr76:
 #line 69 "http_parser.rl"
-	{ parser->data.header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
+	{ req->header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
 	goto st14;
 tr90:
 #line 56 "http_parser.rl"
@@ -423,13 +421,13 @@ tr154:
 	goto st14;
 tr155:
 #line 36 "http_parser.rl"
-	{	parser->data.http_version = 11; }
+	{	req->http_version = 11; }
 	goto st14;
 st14:
 	if ( ++p == pe )
 		goto _test_eof14;
 case 14:
-#line 433 "http_parser.c"
+#line 431 "http_parser.c"
 	if ( (*p) == 10 )
 		goto st15;
 	goto st0;
@@ -481,7 +479,7 @@ case 16:
 tr35:
 #line 81 "http_parser.rl"
 	{
-    parser->data.body_start = (byte_pos)(p - buffer + 1);
+    req->body_start = (byte_pos)(p - buffer + 1);
     {p++; cs = 181; goto _out;}
   }
 	goto st181;
@@ -489,7 +487,7 @@ st181:
 	if ( ++p == pe )
 		goto _test_eof181;
 case 181:
-#line 493 "http_parser.c"
+#line 491 "http_parser.c"
 	goto st0;
 tr29:
 #line 16 "http_parser.rl"
@@ -499,7 +497,7 @@ st17:
 	if ( ++p == pe )
 		goto _test_eof17;
 case 17:
-#line 503 "http_parser.c"
+#line 501 "http_parser.c"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -539,7 +537,7 @@ st18:
 	if ( ++p == pe )
 		goto _test_eof18;
 case 18:
-#line 543 "http_parser.c"
+#line 541 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr39;
 		case 32: goto tr40;
@@ -553,7 +551,7 @@ st19:
 	if ( ++p == pe )
 		goto _test_eof19;
 case 19:
-#line 557 "http_parser.c"
+#line 555 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr42;
 	goto st19;
@@ -565,7 +563,7 @@ st20:
 	if ( ++p == pe )
 		goto _test_eof20;
 case 20:
-#line 569 "http_parser.c"
+#line 567 "http_parser.c"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -872,7 +870,7 @@ st30:
 	if ( ++p == pe )
 		goto _test_eof30;
 case 30:
-#line 876 "http_parser.c"
+#line 874 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr56;
 		case 32: goto tr57;
@@ -890,7 +888,7 @@ st31:
 	if ( ++p == pe )
 		goto _test_eof31;
 case 31:
-#line 894 "http_parser.c"
+#line 892 "http_parser.c"
 	if ( (*p) == 13 )
 		goto st14;
 	goto st31;
@@ -902,7 +900,7 @@ st32:
 	if ( ++p == pe )
 		goto _test_eof32;
 case 32:
-#line 906 "http_parser.c"
+#line 904 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto st14;
 		case 76: goto st33;
@@ -954,7 +952,7 @@ st37:
 	if ( ++p == pe )
 		goto _test_eof37;
 case 37:
-#line 958 "http_parser.c"
+#line 956 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto st14;
 		case 69: goto st38;
@@ -1385,25 +1383,25 @@ case 58:
 	goto st0;
 tr89:
 #line 48 "http_parser.rl"
-	{ parser->data.content_length = 0; }
+	{ req->content_length = 0; }
 #line 50 "http_parser.rl"
 	{
-    parser->data.content_length *= 10;
-    parser->data.content_length += ((*p) - '0');
+    req->content_length *= 10;
+    req->content_length += ((*p) - '0');
   }
 	goto st59;
 tr91:
 #line 50 "http_parser.rl"
 	{
-    parser->data.content_length *= 10;
-    parser->data.content_length += ((*p) - '0');
+    req->content_length *= 10;
+    req->content_length += ((*p) - '0');
   }
 	goto st59;
 st59:
 	if ( ++p == pe )
 		goto _test_eof59;
 case 59:
-#line 1407 "http_parser.c"
+#line 1405 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr90;
 	if ( 48 <= (*p) && (*p) <= 57 )
@@ -1535,7 +1533,7 @@ st64:
 	if ( ++p == pe )
 		goto _test_eof64;
 case 64:
-#line 1539 "http_parser.c"
+#line 1537 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr97;
 		case 32: goto tr98;
@@ -1549,7 +1547,7 @@ st65:
 	if ( ++p == pe )
 		goto _test_eof65;
 case 65:
-#line 1553 "http_parser.c"
+#line 1551 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr100;
 	goto st65;
@@ -1679,7 +1677,7 @@ st70:
 	if ( ++p == pe )
 		goto _test_eof70;
 case 70:
-#line 1683 "http_parser.c"
+#line 1681 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr106;
 		case 32: goto tr107;
@@ -1693,7 +1691,7 @@ st71:
 	if ( ++p == pe )
 		goto _test_eof71;
 case 71:
-#line 1697 "http_parser.c"
+#line 1695 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr109;
 	goto st71;
@@ -1705,7 +1703,7 @@ st72:
 	if ( ++p == pe )
 		goto _test_eof72;
 case 72:
-#line 1709 "http_parser.c"
+#line 1707 "http_parser.c"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -1828,7 +1826,7 @@ st76:
 	if ( ++p == pe )
 		goto _test_eof76;
 case 76:
-#line 1832 "http_parser.c"
+#line 1830 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr115;
 		case 32: goto tr116;
@@ -1842,7 +1840,7 @@ st77:
 	if ( ++p == pe )
 		goto _test_eof77;
 case 77:
-#line 1846 "http_parser.c"
+#line 1844 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr118;
 	goto st77;
@@ -1854,7 +1852,7 @@ st78:
 	if ( ++p == pe )
 		goto _test_eof78;
 case 78:
-#line 1858 "http_parser.c"
+#line 1856 "http_parser.c"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -1977,7 +1975,7 @@ st82:
 	if ( ++p == pe )
 		goto _test_eof82;
 case 82:
-#line 1981 "http_parser.c"
+#line 1979 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr124;
 		case 32: goto tr125;
@@ -1991,7 +1989,7 @@ st83:
 	if ( ++p == pe )
 		goto _test_eof83;
 case 83:
-#line 1995 "http_parser.c"
+#line 1993 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr127;
 	goto st83;
@@ -2003,7 +2001,7 @@ st84:
 	if ( ++p == pe )
 		goto _test_eof84;
 case 84:
-#line 2007 "http_parser.c"
+#line 2005 "http_parser.c"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -2216,7 +2214,7 @@ st91:
 	if ( ++p == pe )
 		goto _test_eof91;
 case 91:
-#line 2220 "http_parser.c"
+#line 2218 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr136;
 		case 32: goto tr137;
@@ -2230,7 +2228,7 @@ st92:
 	if ( ++p == pe )
 		goto _test_eof92;
 case 92:
-#line 2234 "http_parser.c"
+#line 2232 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr139;
 	goto st92;
@@ -2242,7 +2240,7 @@ st93:
 	if ( ++p == pe )
 		goto _test_eof93;
 case 93:
-#line 2246 "http_parser.c"
+#line 2244 "http_parser.c"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -2542,7 +2540,7 @@ st103:
 	if ( ++p == pe )
 		goto _test_eof103;
 case 103:
-#line 2546 "http_parser.c"
+#line 2544 "http_parser.c"
 	switch( (*p) ) {
 		case 13: goto tr151;
 		case 32: goto tr152;
@@ -2556,7 +2554,7 @@ st104:
 	if ( ++p == pe )
 		goto _test_eof104;
 case 104:
-#line 2560 "http_parser.c"
+#line 2558 "http_parser.c"
 	if ( (*p) == 13 )
 		goto tr154;
 	goto st104;
@@ -2582,8 +2580,8 @@ tr180:
 	{ parser->mark_query = (byte_pos)(p - buffer); }
 #line 39 "http_parser.rl"
 	{
-    parser->data.query.from = parser->mark_query;
-    parser->data.query.to = (byte_pos)(p - buffer);
+    req->query.from = parser->mark_query;
+    req->query.to = (byte_pos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -2591,8 +2589,8 @@ tr180:
 tr184:
 #line 39 "http_parser.rl"
 	{
-    parser->data.query.from = parser->mark_query;
-    parser->data.query.to = (byte_pos)(p - buffer);
+    req->query.from = parser->mark_query;
+    req->query.to = (byte_pos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -2601,7 +2599,7 @@ st106:
 	if ( ++p == pe )
 		goto _test_eof106;
 case 106:
-#line 2605 "http_parser.c"
+#line 2603 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr157;
 		case 37: goto tr158;
@@ -2623,7 +2621,7 @@ st107:
 	if ( ++p == pe )
 		goto _test_eof107;
 case 107:
-#line 2627 "http_parser.c"
+#line 2625 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr160;
 		case 37: goto st108;
@@ -2645,7 +2643,7 @@ st108:
 	if ( ++p == pe )
 		goto _test_eof108;
 case 108:
-#line 2649 "http_parser.c"
+#line 2647 "http_parser.c"
 	if ( (*p) < 65 ) {
 		if ( 48 <= (*p) && (*p) <= 57 )
 			goto st109;
@@ -2676,7 +2674,7 @@ st110:
 	if ( ++p == pe )
 		goto _test_eof110;
 case 110:
-#line 2680 "http_parser.c"
+#line 2678 "http_parser.c"
 	switch( (*p) ) {
 		case 43: goto st110;
 		case 58: goto st111;
@@ -2701,7 +2699,7 @@ st111:
 	if ( ++p == pe )
 		goto _test_eof111;
 case 111:
-#line 2705 "http_parser.c"
+#line 2703 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr15;
 		case 34: goto st0;
@@ -2748,7 +2746,7 @@ st114:
 	if ( ++p == pe )
 		goto _test_eof114;
 case 114:
-#line 2752 "http_parser.c"
+#line 2750 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr168;
 		case 34: goto st0;
@@ -2797,7 +2795,7 @@ st117:
 	if ( ++p == pe )
 		goto _test_eof117;
 case 117:
-#line 2801 "http_parser.c"
+#line 2799 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr15;
 		case 34: goto st0;
@@ -2845,7 +2843,7 @@ st120:
 	if ( ++p == pe )
 		goto _test_eof120;
 case 120:
-#line 2849 "http_parser.c"
+#line 2847 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr179;
 		case 34: goto st0;
@@ -2866,7 +2864,7 @@ st121:
 	if ( ++p == pe )
 		goto _test_eof121;
 case 121:
-#line 2870 "http_parser.c"
+#line 2868 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr183;
 		case 34: goto st0;
@@ -2887,7 +2885,7 @@ st122:
 	if ( ++p == pe )
 		goto _test_eof122;
 case 122:
-#line 2891 "http_parser.c"
+#line 2889 "http_parser.c"
 	if ( (*p) < 65 ) {
 		if ( 48 <= (*p) && (*p) <= 57 )
 			goto st123;
@@ -3249,7 +3247,7 @@ st143:
 	if ( ++p == pe )
 		goto _test_eof143;
 case 143:
-#line 3253 "http_parser.c"
+#line 3251 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3386,7 +3384,7 @@ st150:
 	if ( ++p == pe )
 		goto _test_eof150;
 case 150:
-#line 3390 "http_parser.c"
+#line 3388 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3504,7 +3502,7 @@ st156:
 	if ( ++p == pe )
 		goto _test_eof156;
 case 156:
-#line 3508 "http_parser.c"
+#line 3506 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3565,7 +3563,7 @@ st159:
 	if ( ++p == pe )
 		goto _test_eof159;
 case 159:
-#line 3569 "http_parser.c"
+#line 3567 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3645,7 +3643,7 @@ st163:
 	if ( ++p == pe )
 		goto _test_eof163;
 case 163:
-#line 3649 "http_parser.c"
+#line 3647 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3782,7 +3780,7 @@ st170:
 	if ( ++p == pe )
 		goto _test_eof170;
 case 170:
-#line 3786 "http_parser.c"
+#line 3784 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3900,7 +3898,7 @@ st176:
 	if ( ++p == pe )
 		goto _test_eof176;
 case 176:
-#line 3904 "http_parser.c"
+#line 3902 "http_parser.c"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -4177,7 +4175,7 @@ case 180:
 	_out: {}
 	}
 
-#line 153 "http_parser.rl"
+#line 151 "http_parser.rl"
 
   assert(p <= pe); // buffer overflow after parsing execute
 
@@ -4194,20 +4192,20 @@ bool http_parser_is_finished(const struct http_parser *parser) {
   return (parser->saved_cs >= http_parser_first_final);
 }
 
-bool http_is_keep_alive(struct http_parser_data *data) {
-  switch (data->http_version) {
+bool http_request_is_keep_alive(struct http_request *req) {
+  switch (req->http_version) {
     case 10:
-      if (data->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
+      if (req->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
       break;
     case 11:
-      if (data->header_connection == HTTP_CONNECTION_CLOSE) return false;
+      if (req->header_connection == HTTP_CONNECTION_CLOSE) return false;
       break;
     default:
       assert(false);
       return false;
   };
 
-  switch (data->request_method) {
+  switch (req->request_method) {
     case HTTP_REQUEST_METHOD_HEAD:
     case HTTP_REQUEST_METHOD_GET:
       return true;
@@ -4215,7 +4213,7 @@ bool http_is_keep_alive(struct http_parser_data *data) {
 
     case HTTP_REQUEST_METHOD_POST:
     case HTTP_REQUEST_METHOD_PUT:
-      return (data->content_length >= 0);
+      return (req->content_length >= 0);
       break;
     // XXX
   };

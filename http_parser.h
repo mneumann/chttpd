@@ -24,7 +24,7 @@ struct byte_range { byte_pos from, to; };
 /*
  * User visible data
  */
-struct http_parser_data {
+struct http_request {
   struct byte_range request_uri;
   struct byte_range fragment;
   struct byte_range request_path;
@@ -54,18 +54,19 @@ struct http_parser {
   byte_pos mark;
   byte_pos mark_query;
   struct byte_range field_name;
-
-  struct http_parser_data data;
 };
 
 void http_parser_init(struct http_parser *parser);
 
-byte_pos http_parser_run(struct http_parser *parser,
+byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
                          const char *buffer, byte_pos buffer_length, byte_pos buffer_offset);
 
 bool http_parser_has_error(const struct http_parser *parser);
+
+
 bool http_parser_is_finished(const struct http_parser *parser);
 
-bool http_is_keep_alive(struct http_parser_data *date);
+void http_request_init(struct http_request *req);
+bool http_request_is_keep_alive(struct http_request *data);
 
 #endif

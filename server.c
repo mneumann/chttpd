@@ -65,36 +65,36 @@ void print_header(const char *header, struct byte_range r, char *buffer) {
 
 // returns number of overflow bytes (they) 
 // return < 0 for not keep-alive
-int parsing_done(struct http_parser_data *data, const char *buffer, byte_pos buf_len, int sock, DBuf &out) {
+int parsing_done(struct http_request *req, const char *buffer, byte_pos buf_len, int sock, DBuf &out) {
   //print_header("request_uri", data->request_uri, buffer);
   //print_header("request_method", data->request_method, buffer);
   //print_header("connection", data->header_connection, buffer);
 
   //printf("Content-Length: %d\n", data->content_length);
 
-  bool keep_alive = http_is_keep_alive(data); 
+  bool keep_alive = http_request_is_keep_alive(req); 
 
-  int content_length = data->content_length;
+  int content_length = req->content_length;
   if (content_length < 0) {
     content_length = 0;
   }
 
-  assert(data->body_start >= 0);
-  assert(buf_len >= data->body_start);
+  assert(req->body_start >= 0);
+  assert(buf_len >= req->body_start);
 
   // [0, 1, 2]
-  int num_bytes_in_buffer = buf_len - data->body_start;
+  int num_bytes_in_buffer = buf_len - req->body_start;
 
-  assert(data->http_version == 10 || data->http_version == 11);
+  assert(req->http_version == 10 || req->http_version == 11);
 
-  if (data->http_version == 10) {
+  if (req->http_version == 10) {
     out << "HTTP/1.0 200 OK\r\n";
 
     if (keep_alive) {
       out << "Connection: Keep-Alive\r\n";
     }
   }
-  else if (data->http_version == 11) {
+  else if (req->http_version == 11) {
     out << "HTTP/1.1 200 OK\r\n";
 
     if (!keep_alive) {
@@ -141,7 +141,9 @@ int parsing_done(struct http_parser_data *data, const char *buffer, byte_pos buf
 static void handle_connection(int sock)
 {
   struct http_parser parser;
+  struct http_request req;
   http_parser_init(&parser);
+  http_request_init(&req);
 
   byte_pos buf_offset = 0;
 
@@ -149,7 +151,7 @@ static void handle_connection(int sock)
   DBuf out(10000);
 
   for (;;) {
-    buf_offset = http_parser_run(&parser, (const char*)buf.data(), buf.size(), buf_offset); 
+    buf_offset = http_parser_run(&parser, &req, (const char*)buf.data(), buf.size(), buf_offset); 
 
     if (http_parser_has_error(&parser)) {
       printf("Invalid HTTP----------------------------------------------\n");
@@ -160,7 +162,7 @@ static void handle_connection(int sock)
 
     if (http_parser_is_finished(&parser)) {
       //printf("HTTP parsing done\n");
-      const int read_too_much = parsing_done(&parser.data, (const char*)buf.data(), buf.size(), sock, out);
+      const int read_too_much = parsing_done(&req, (const char*)buf.data(), buf.size(), sock, out);
       if (read_too_much < 0) {
         // connection close
         break;
@@ -175,6 +177,7 @@ static void handle_connection(int sock)
 
         buf_offset = 0;
         http_parser_init(&parser);
+        http_request_init(&req);
         continue;
       }
     }

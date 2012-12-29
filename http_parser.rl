@@ -19,37 +19,37 @@
   action request_uri { ASSIGN_FIELD(request_uri, fpc); }
   action fragment { ASSIGN_FIELD(fragment, fpc); }
 
-  action request_method_get { parser->data.request_method = HTTP_REQUEST_METHOD_GET; }
-  action request_method_post { parser->data.request_method = HTTP_REQUEST_METHOD_POST; }
-  action request_method_head { parser->data.request_method = HTTP_REQUEST_METHOD_HEAD; }
-  action request_method_options { parser->data.request_method = HTTP_REQUEST_METHOD_OPTIONS; }
-  action request_method_put { parser->data.request_method = HTTP_REQUEST_METHOD_PUT; }
-  action request_method_delete { parser->data.request_method = HTTP_REQUEST_METHOD_DELETE; }
-  action request_method_trace { parser->data.request_method = HTTP_REQUEST_METHOD_TRACE; }
-  action request_method_connect { parser->data.request_method = HTTP_REQUEST_METHOD_CONNECT; }
+  action request_method_get { req->request_method = HTTP_REQUEST_METHOD_GET; }
+  action request_method_post { req->request_method = HTTP_REQUEST_METHOD_POST; }
+  action request_method_head { req->request_method = HTTP_REQUEST_METHOD_HEAD; }
+  action request_method_options { req->request_method = HTTP_REQUEST_METHOD_OPTIONS; }
+  action request_method_put { req->request_method = HTTP_REQUEST_METHOD_PUT; }
+  action request_method_delete { req->request_method = HTTP_REQUEST_METHOD_DELETE; }
+  action request_method_trace { req->request_method = HTTP_REQUEST_METHOD_TRACE; }
+  action request_method_connect { req->request_method = HTTP_REQUEST_METHOD_CONNECT; }
   action request_method_other {
-    parser->data.request_method = HTTP_REQUEST_METHOD_OTHER;
+    req->request_method = HTTP_REQUEST_METHOD_OTHER;
     ASSIGN_FIELD(request_method_other, fpc);
   }
 
-  action http_version_10 {	parser->data.http_version = 10; }
-  action http_version_11 {	parser->data.http_version = 11; }
+  action http_version_10 {	req->http_version = 10; }
+  action http_version_11 {	req->http_version = 11; }
   action request_path { ASSIGN_FIELD(request_path, fpc); }
 
   action query {
-    parser->data.query.from = parser->mark_query;
-    parser->data.query.to = (byte_pos)(fpc - buffer);
+    req->query.from = parser->mark_query;
+    req->query.to = (byte_pos)(fpc - buffer);
   }
 
   #
   # headers
   #
 
-  action content_length_init { parser->data.content_length = 0; }
+  action content_length_init { req->content_length = 0; }
 
   action content_length_digit {
-    parser->data.content_length *= 10;
-    parser->data.content_length += (fc - '0');
+    req->content_length *= 10;
+    req->content_length += (fc - '0');
   }
 
 
@@ -65,8 +65,8 @@
   action header_referer { ASSIGN_FIELD(header_referer, fpc); }
   action header_cookie { ASSIGN_FIELD(header_cookie, fpc); }
 
-  action header_connection_close { parser->data.header_connection = HTTP_CONNECTION_CLOSE; }
-  action header_connection_keep_alive { parser->data.header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
+  action header_connection_close { req->header_connection = HTTP_CONNECTION_CLOSE; }
+  action header_connection_keep_alive { req->header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
 
   action field_name {
     parser->field_name.from = parser->mark;
@@ -79,7 +79,7 @@
   }
 
   action done {
-    parser->data.body_start = (byte_pos)(fpc - buffer + 1);
+    req->body_start = (byte_pos)(fpc - buffer + 1);
     fbreak;
   }
 
@@ -94,13 +94,13 @@
 #include <assert.h>
 
 #define ASSIGN_FIELD(field, fpc) \
-  parser->data.field.from = parser->mark; \
-  parser->data.field.to = (byte_pos)(fpc - buffer);
+  req->field.from = parser->mark; \
+  req->field.to = (byte_pos)(fpc - buffer);
 
-static void http_parser_data_init(struct http_parser_data *data) {
+void http_request_init(struct http_request *req) {
   #define INIT_RANGE(field) \
-    data->field.from = -1;  \
-    data->field.to = -1;
+    req->field.from = -1;  \
+    req->field.to = -1;
 
   INIT_RANGE(request_uri);
   INIT_RANGE(fragment);
@@ -108,10 +108,10 @@ static void http_parser_data_init(struct http_parser_data *data) {
   INIT_RANGE(request_path);
   INIT_RANGE(query);
 
-  data->content_length = -1;
-  data->http_version = -1;
-  data->request_method = -1;
-  data->header_connection = -1;
+  req->content_length = -1;
+  req->http_version = -1;
+  req->request_method = -1;
+  req->header_connection = -1;
 
   INIT_RANGE(header_content_type);
   INIT_RANGE(header_date);
@@ -120,7 +120,7 @@ static void http_parser_data_init(struct http_parser_data *data) {
   INIT_RANGE(header_referer);
   INIT_RANGE(header_cookie);
 
-  data->body_start = -1;
+  req->body_start = -1;
 
   #undef INIT_RANGE
 }
@@ -129,11 +129,9 @@ void http_parser_init(struct http_parser *parser) {
   int cs = 0;
   %% write init;
   parser->saved_cs = cs;
-
-  http_parser_data_init(&parser->data);
 }
 
-byte_pos http_parser_run(struct http_parser *parser,
+byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
                          const char *buffer, byte_pos buffer_length, byte_pos buffer_offset) {
 
   assert(parser);
@@ -166,20 +164,20 @@ bool http_parser_is_finished(const struct http_parser *parser) {
   return (parser->saved_cs >= http_parser_first_final);
 }
 
-bool http_is_keep_alive(struct http_parser_data *data) {
-  switch (data->http_version) {
+bool http_request_is_keep_alive(struct http_request *req) {
+  switch (req->http_version) {
     case 10:
-      if (data->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
+      if (req->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
       break;
     case 11:
-      if (data->header_connection == HTTP_CONNECTION_CLOSE) return false;
+      if (req->header_connection == HTTP_CONNECTION_CLOSE) return false;
       break;
     default:
       assert(false);
       return false;
   };
 
-  switch (data->request_method) {
+  switch (req->request_method) {
     case HTTP_REQUEST_METHOD_HEAD:
     case HTTP_REQUEST_METHOD_GET:
       return true;
@@ -187,7 +185,7 @@ bool http_is_keep_alive(struct http_parser_data *data) {
 
     case HTTP_REQUEST_METHOD_POST:
     case HTTP_REQUEST_METHOD_PUT:
-      return (data->content_length >= 0);
+      return (req->content_length >= 0);
       break;
     // XXX
   };
