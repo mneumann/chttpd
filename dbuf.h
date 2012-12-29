@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdint.h>
 
 //
 // dynamic buffer implementation
@@ -34,11 +35,18 @@ public:
     append(str, strlen(str));
   }
 
+  void append_num(uint64_t num) {
+    char buf[21]; // 2**64 < 10**20 (+ 1 NUL byte)
+    int sz = snprintf(buf, 21, "%ld", num);
+    assert(sz > 0 && sz < 21);
+    append(buf, sz);
+  }
+
   void reset() {
     _size = 0;
   }
 
-  void* data() { return _data; }
+  char* data() { return _data; }
   size_t size() { return _size; }
 
   void operator <<(const char *str) {
@@ -56,13 +64,20 @@ public:
     memmove(_data, _data+n, _size);
   }
 
+  /*
+   * Make sure that there is enough capacity for "more" bytes in the buffer. 
+   */
+  void reserve_more(size_t more) {
+    resize(_size + more);
+  }
+
   void resize_if_full() {
     if (_size == _capa) {
       resize(_capa * 2);
     }
   }
 
-  void* end_ptr() {
+  char* end_ptr() {
     return _data + _size;
   }
 
@@ -82,6 +97,7 @@ private:
   size_t _size;
 
   void resize(size_t at_least) {
+    if (_capa >= at_least) return;
     while (_capa < at_least) _capa *= 2;
     assert(_capa >= at_least);
     _data = (char*) realloc(_data, _capa);
