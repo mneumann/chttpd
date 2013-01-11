@@ -34,16 +34,14 @@ struct Connection
   DBuf read_buffer;
   bool read_clear;
 
-  http_parser parser;
-  http_request req;
-  byte_pos parse_offset; 
+  HTTP::BytePos parse_offset; 
   bool in_body;
 
+  HTTP::Parser parser;
+  HTTP::Request req;
+ 
   Connection(size_t read_buf_capa) : read_buffer(read_buf_capa),
-                                     read_clear(true), parse_offset(0), in_body(false) {
-    http_parser_init(&parser);
-    http_request_init(&req);
-  }
+                                     read_clear(true), parse_offset(0), in_body(false) { }
 };
 
 struct write_req_t {
@@ -92,7 +90,7 @@ on_write_done_cb(uv_write_t *req, int status) {
   Connection *conn = (Connection*) wr->conn;
   delete wr;
 
-  if (!http_request_is_keep_alive(&conn->req)) {
+  if (!conn->req.is_keep_alive()) {
     uv_close((uv_handle_t*)conn, on_close_cb);
   }
 }
@@ -124,17 +122,17 @@ handle_http_error(Connection *conn) {
 static void
 handle_http_header_parsed(Connection *conn)
 {
-  http_request *req = &conn->req;
+  HTTP::Request &req = conn->req;
 
-  int content_length = req->content_length;
+  int content_length = req.content_length;
   if (content_length < 0) {
     content_length = 0;
   }
 
   conn->in_body = true;
 
-  bool keep_alive = http_request_is_keep_alive(req);
-  int num_bytes_in_buffer = conn->read_buffer.size() - req->body_start;
+  bool keep_alive = req.is_keep_alive();
+  int num_bytes_in_buffer = conn->read_buffer.size() - req.body_start;
 
   //
   // make sure we complete reading in the body
@@ -157,17 +155,17 @@ handle_http_body(Connection *conn)
 }
 
 static void
-handle_response(http_request *req, DBuf &out, bool keep_alive)
+handle_response(const HTTP::Request &req, DBuf &out, bool keep_alive)
 {
   // Produce output
-  if (req->http_version == 10) {
+  if (req.http_version == 10) {
     out << "HTTP/1.0 200 OK\r\n";
 
     if (keep_alive) {
       out << "Connection: Keep-Alive\r\n";
     }
   }
-  else if (req->http_version == 11) {
+  else if (req.http_version == 11) {
     out << "HTTP/1.1 200 OK\r\n";
 
     if (!keep_alive) {
@@ -201,10 +199,10 @@ handle_response(http_request *req, DBuf &out, bool keep_alive)
 static void
 handle_http_request(Connection *conn)
 {
-  http_request *request = &conn->req;
-  bool keep_alive = http_request_is_keep_alive(request);
+  HTTP::Request &request = conn->req;
+  bool keep_alive = request.is_keep_alive();
 
-  int content_length = request->content_length;
+  int content_length = request.content_length;
   if (content_length < 0) { content_length = 0; }
 
   write_req_t *req = new write_req_t();
@@ -215,7 +213,7 @@ handle_http_request(Connection *conn)
 
   if (keep_alive) {
     // how many bytes in our buffer belong to the next request?
-    size_t request_bytes = request->body_start + content_length;
+    size_t request_bytes = request.body_start + content_length;
     if (conn->read_buffer.size() > request_bytes) {
       conn->read_buffer.shift_left(request_bytes);
     }
@@ -253,13 +251,12 @@ on_read_cb(uv_stream_t *stream, ssize_t nread, uv_buf_t buf)
       handle_http_body(conn);
     }
     else {
-      conn->parse_offset = 
-        http_parser_run(&conn->parser, &conn->req, conn->read_buffer.data(), conn->read_buffer.size(), conn->parse_offset);
+      conn->parse_offset = conn->parser.run(conn->req, conn->read_buffer.data(), conn->read_buffer.size(), conn->parse_offset);
 
-      if (http_parser_is_finished(&conn->parser)) {
+      if (conn->parser.is_finished()) {
         handle_http_header_parsed(conn);
       }
-      else if (http_parser_has_error(&conn->parser)) {
+      else if (conn->parser.has_error()) {
         handle_http_error(conn);
       }
     }

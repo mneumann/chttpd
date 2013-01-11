@@ -2,7 +2,7 @@
  * Copyright (c) 2005 Zed A. Shaw
  * You can redistribute it and/or modify it under the same terms as Ruby.
  *
- * Copyright (c) 2012 by Michael Neumann (mneumann@ntecs.de)
+ * Copyright (c) 2012, 2013 by Michael Neumann (mneumann@ntecs.de)
  */
 
 // compile with ragel -G2 -C ...
@@ -13,43 +13,43 @@
   
   machine http_parser;
 
-  action mark { parser->mark = (byte_pos)(fpc - buffer); }
-  action mark_query { parser->mark_query = (byte_pos)(fpc - buffer); }
+  action mark { this->mark = (BytePos)(fpc - buffer); }
+  action mark_query { this->mark_query = (BytePos)(fpc - buffer); }
 
   action request_uri { ASSIGN_FIELD(request_uri, fpc); }
   action fragment { ASSIGN_FIELD(fragment, fpc); }
 
-  action request_method_get { req->request_method = HTTP_REQUEST_METHOD_GET; }
-  action request_method_post { req->request_method = HTTP_REQUEST_METHOD_POST; }
-  action request_method_head { req->request_method = HTTP_REQUEST_METHOD_HEAD; }
-  action request_method_options { req->request_method = HTTP_REQUEST_METHOD_OPTIONS; }
-  action request_method_put { req->request_method = HTTP_REQUEST_METHOD_PUT; }
-  action request_method_delete { req->request_method = HTTP_REQUEST_METHOD_DELETE; }
-  action request_method_trace { req->request_method = HTTP_REQUEST_METHOD_TRACE; }
-  action request_method_connect { req->request_method = HTTP_REQUEST_METHOD_CONNECT; }
+  action request_method_get { request.request_method = REQUEST_METHOD::GET; }
+  action request_method_post { request.request_method = REQUEST_METHOD::POST; }
+  action request_method_head { request.request_method = REQUEST_METHOD::HEAD; }
+  action request_method_options { request.request_method = REQUEST_METHOD::OPTIONS; }
+  action request_method_put { request.request_method = REQUEST_METHOD::PUT; }
+  action request_method_delete { request.request_method = REQUEST_METHOD::DELETE; }
+  action request_method_trace { request.request_method = REQUEST_METHOD::TRACE; }
+  action request_method_connect { request.request_method = REQUEST_METHOD::CONNECT; }
   action request_method_other {
-    req->request_method = HTTP_REQUEST_METHOD_OTHER;
+    request.request_method = REQUEST_METHOD::OTHER;
     ASSIGN_FIELD(request_method_other, fpc);
   }
 
-  action http_version_10 {	req->http_version = 10; }
-  action http_version_11 {	req->http_version = 11; }
+  action http_version_10 {	request.http_version = 10; }
+  action http_version_11 {	request.http_version = 11; }
   action request_path { ASSIGN_FIELD(request_path, fpc); }
 
   action query {
-    req->query.from = parser->mark_query;
-    req->query.to = (byte_pos)(fpc - buffer);
+    request.query.from = this->mark_query;
+    request.query.to = (BytePos)(fpc - buffer);
   }
 
   #
   # headers
   #
 
-  action content_length_init { req->content_length = 0; }
+  action content_length_init { request.content_length = 0; }
 
   action content_length_digit {
-    req->content_length *= 10;
-    req->content_length += (fc - '0');
+    request.content_length *= 10;
+    request.content_length += (fc - '0');
   }
 
 
@@ -65,12 +65,12 @@
   action header_referer { ASSIGN_FIELD(header_referer, fpc); }
   action header_cookie { ASSIGN_FIELD(header_cookie, fpc); }
 
-  action header_connection_close { req->header_connection = HTTP_CONNECTION_CLOSE; }
-  action header_connection_keep_alive { req->header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
+  action header_connection_close { request.header_connection = CONNECTION::CLOSE; }
+  action header_connection_keep_alive { request.header_connection = CONNECTION::KEEP_ALIVE; }
 
   action field_name {
-    parser->field_name.from = parser->mark;
-    parser->field_name.to = (byte_pos)(fpc - buffer);
+    this->field_name.from = this->mark;
+    this->field_name.to = (BytePos)(fpc - buffer);
   }
 
   action header {
@@ -79,7 +79,7 @@
   }
 
   action done {
-    req->body_start = (byte_pos)(fpc - buffer + 1);
+    request.body_start = (BytePos)(fpc - buffer + 1);
     fbreak;
   }
 
@@ -87,63 +87,37 @@
 
 }%%
 
-/** Data **/
-%% write data;
-
 #include "http_parser.h"
 #include <assert.h>
 
+namespace HTTP
+{
+
+/** Data **/
+%% write data;
+
 #define ASSIGN_FIELD(field, fpc) \
-  req->field.from = parser->mark; \
-  req->field.to = (byte_pos)(fpc - buffer);
+  request.field.from = this->mark; \
+  request.field.to = (BytePos)(fpc - buffer);
 
-void http_request_init(struct http_request *req) {
-  #define INIT_RANGE(field) \
-    req->field.from = -1;  \
-    req->field.to = -1;
-
-  INIT_RANGE(request_uri);
-  INIT_RANGE(fragment);
-  INIT_RANGE(request_method_other);
-  INIT_RANGE(request_path);
-  INIT_RANGE(query);
-
-  req->content_length = -1;
-  req->http_version = -1;
-  req->request_method = -1;
-  req->header_connection = -1;
-
-  INIT_RANGE(header_content_type);
-  INIT_RANGE(header_date);
-  INIT_RANGE(header_host);
-  INIT_RANGE(header_user_agent);
-  INIT_RANGE(header_referer);
-  INIT_RANGE(header_cookie);
-
-  req->body_start = -1;
-
-  #undef INIT_RANGE
-}
-
-void http_parser_init(struct http_parser *parser) {
+Parser::Parser()
+{
   int cs = 0;
   %% write init;
-  parser->saved_cs = cs;
+  this->saved_cs = cs;
 }
 
-byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
-                         const char *buffer, byte_pos buffer_length, byte_pos buffer_offset) {
-
-  assert(parser);
-  assert(buffer);
-
+BytePos
+Parser::run(Request &request, const char *buffer, BytePos buffer_length, BytePos buffer_offset)
+{
   if (buffer_length == 0) return 0;
 
+  assert(buffer);
   assert(buffer_length > 0);
   assert(buffer_offset < buffer_length);
 
   // Ragel uses: cs, p, pe
-  int cs = parser->saved_cs;               // current ragel machine state
+  int cs = this->saved_cs;                 // current ragel machine state
   const char *p = buffer + buffer_offset;  // pointer to start of data
   const char *pe = buffer + buffer_length; // pointer to end of data
 
@@ -151,44 +125,52 @@ byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
 
   assert(p <= pe); // buffer overflow after parsing execute
 
-  parser->saved_cs = cs;
+  this->saved_cs = cs;
 
   return (p - buffer); // returns the new buffer offset
 }
 
-bool http_parser_has_error(const struct http_parser *parser) {
-  return (parser->saved_cs == http_parser_error);
+bool
+Parser::has_error()
+{
+  return (this->saved_cs == http_parser_error);
 }
 
-bool http_parser_is_finished(const struct http_parser *parser) {
-  return (parser->saved_cs >= http_parser_first_final);
+bool
+Parser::is_finished()
+{
+  return (this->saved_cs >= http_parser_first_final);
 }
 
-bool http_request_is_keep_alive(struct http_request *req) {
-  switch (req->http_version) {
+bool
+Request::is_keep_alive()
+{
+  switch (this->http_version) {
     case 10:
-      if (req->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
+      if (this->header_connection != CONNECTION::KEEP_ALIVE) return false;
       break;
     case 11:
-      if (req->header_connection == HTTP_CONNECTION_CLOSE) return false;
+      if (this->header_connection == CONNECTION::CLOSE) return false;
       break;
     default:
       assert(false);
       return false;
   };
 
-  switch (req->request_method) {
-    case HTTP_REQUEST_METHOD_HEAD:
-    case HTTP_REQUEST_METHOD_GET:
+  switch (this->request_method) {
+    case REQUEST_METHOD::HEAD:
+    case REQUEST_METHOD::GET:
       return true;
       break;
 
-    case HTTP_REQUEST_METHOD_POST:
-    case HTTP_REQUEST_METHOD_PUT:
-      return (req->content_length >= 0);
+    case REQUEST_METHOD::POST:
+    case REQUEST_METHOD::PUT:
+      return (this->content_length >= 0);
       break;
     // XXX
   };
 
   return false;
 }
+
+}; // namespace HTTP

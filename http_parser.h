@@ -2,71 +2,90 @@
 #define __HTTP_PARSER__HEADER__
 
 #include <stdint.h>
-#include <stdbool.h>
 
-typedef int32_t byte_pos;
-struct byte_range { byte_pos from, to; };
+namespace HTTP
+{
 
-#define HTTP_REQUEST_METHOD_GET 1
-#define HTTP_REQUEST_METHOD_POST 2
-#define HTTP_REQUEST_METHOD_HEAD 3
-#define HTTP_REQUEST_METHOD_OPTIONS 4
-#define HTTP_REQUEST_METHOD_PUT 5
-#define HTTP_REQUEST_METHOD_DELETE 6
-#define HTTP_REQUEST_METHOD_TRACE 7
-#define HTTP_REQUEST_METHOD_CONNECT 8
-#define HTTP_REQUEST_METHOD_OTHER 100 
+  enum class REQUEST_METHOD {
+    NONE = 0,
+    GET = 1,
+    POST,
+    HEAD,
+    OPTIONS,
+    PUT,
+    DELETE,
+    TRACE,
+    CONNECT,
+    OTHER = 100 
+  };
 
-#define HTTP_CONNECTION_CLOSE 1
-#define HTTP_CONNECTION_KEEP_ALIVE 2
+  enum class CONNECTION {
+    NONE = 0,
+    CLOSE = 1,
+    KEEP_ALIVE = 2
+  };
 
+  typedef int32_t BytePos;
 
-/*
- * User visible data
- */
-struct http_request {
-  struct byte_range request_uri;
-  struct byte_range fragment;
-  struct byte_range request_path;
-  struct byte_range query;
+  struct ByteSlice
+  {
+    BytePos from;
+    BytePos to;
+    ByteSlice() : from(-1), to(-1) {}
+  };
 
-  int32_t http_version; // XXX: use signed char?
+  struct Request
+  {
+    ByteSlice request_uri;
+    ByteSlice fragment;
+    ByteSlice request_path;
+    ByteSlice query;
 
-  int32_t request_method; // XXX: use signed char?
-  int32_t header_connection; // XXX: use signed char?
+    int32_t   http_version; // XXX: use signed char?
 
-  struct byte_range request_method_other;
+    REQUEST_METHOD request_method;
+    CONNECTION     header_connection;
 
-  int32_t content_length;
-  struct byte_range header_content_type;
-  struct byte_range header_date;
-  struct byte_range header_host;
-  struct byte_range header_user_agent;
-  struct byte_range header_referer;
-  struct byte_range header_cookie;
+    ByteSlice request_method_other;
+    int32_t   content_length;
 
-  byte_pos body_start;
-};
+    ByteSlice header_content_type;
+    ByteSlice header_date;
+    ByteSlice header_host;
+    ByteSlice header_user_agent;
+    ByteSlice header_referer;
+    ByteSlice header_cookie;
 
-struct http_parser {
-  int saved_cs;
+    BytePos   body_start;
 
-  byte_pos mark;
-  byte_pos mark_query;
-  struct byte_range field_name;
-};
+    Request() : request_method(REQUEST_METHOD::NONE),
+                header_connection(CONNECTION::NONE),
+                content_length(-1),
+                http_version(-1),
+                body_start(-1) {}
 
-void http_parser_init(struct http_parser *parser);
+    bool is_keep_alive();
+  };
 
-byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
-                         const char *buffer, byte_pos buffer_length, byte_pos buffer_offset);
+  class Parser
+  {
+    private:
 
-bool http_parser_has_error(const struct http_parser *parser);
+    int saved_cs;
+    BytePos   mark;
+    BytePos   mark_query;
+    ByteSlice field_name;
 
+    public:
 
-bool http_parser_is_finished(const struct http_parser *parser);
+    Parser();
 
-void http_request_init(struct http_request *req);
-bool http_request_is_keep_alive(struct http_request *data);
+    BytePos run(Request &request, const char *buffer, BytePos buffer_length, BytePos buffer_offset);
+
+    bool has_error();
+    bool is_finished();
+  };
+
+}; /* namespace HTTP */
 
 #endif

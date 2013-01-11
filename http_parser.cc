@@ -4,7 +4,7 @@
  * Copyright (c) 2005 Zed A. Shaw
  * You can redistribute it and/or modify it under the same terms as Ruby.
  *
- * Copyright (c) 2012 by Michael Neumann (mneumann@ntecs.de)
+ * Copyright (c) 2012, 2013 by Michael Neumann (mneumann@ntecs.de)
  */
 
 // compile with ragel -G2 -C ...
@@ -15,9 +15,15 @@
 #line 88 "http_parser.rl"
 
 
+#include "http_parser.h"
+#include <assert.h>
+
+namespace HTTP
+{
+
 /** Data **/
 
-#line 21 "http_parser.c"
+#line 27 "http_parser.cc"
 static const int http_parser_start = 1;
 static const int http_parser_first_final = 181;
 static const int http_parser_error = 0;
@@ -25,73 +31,41 @@ static const int http_parser_error = 0;
 static const int http_parser_en_main = 1;
 
 
-#line 92 "http_parser.rl"
-
-#include "http_parser.h"
-#include <assert.h>
+#line 98 "http_parser.rl"
 
 #define ASSIGN_FIELD(field, fpc) \
-  req->field.from = parser->mark; \
-  req->field.to = (byte_pos)(fpc - buffer);
+  request.field.from = this->mark; \
+  request.field.to = (BytePos)(fpc - buffer);
 
-void http_request_init(struct http_request *req) {
-  #define INIT_RANGE(field) \
-    req->field.from = -1;  \
-    req->field.to = -1;
-
-  INIT_RANGE(request_uri);
-  INIT_RANGE(fragment);
-  INIT_RANGE(request_method_other);
-  INIT_RANGE(request_path);
-  INIT_RANGE(query);
-
-  req->content_length = -1;
-  req->http_version = -1;
-  req->request_method = -1;
-  req->header_connection = -1;
-
-  INIT_RANGE(header_content_type);
-  INIT_RANGE(header_date);
-  INIT_RANGE(header_host);
-  INIT_RANGE(header_user_agent);
-  INIT_RANGE(header_referer);
-  INIT_RANGE(header_cookie);
-
-  req->body_start = -1;
-
-  #undef INIT_RANGE
-}
-
-void http_parser_init(struct http_parser *parser) {
+Parser::Parser()
+{
   int cs = 0;
   
-#line 69 "http_parser.c"
+#line 45 "http_parser.cc"
 	{
 	cs = http_parser_start;
 	}
 
-#line 131 "http_parser.rl"
-  parser->saved_cs = cs;
+#line 107 "http_parser.rl"
+  this->saved_cs = cs;
 }
 
-byte_pos http_parser_run(struct http_parser *parser, struct http_request *req,
-                         const char *buffer, byte_pos buffer_length, byte_pos buffer_offset) {
-
-  assert(parser);
-  assert(buffer);
-
+BytePos
+Parser::run(Request &request, const char *buffer, BytePos buffer_length, BytePos buffer_offset)
+{
   if (buffer_length == 0) return 0;
 
+  assert(buffer);
   assert(buffer_length > 0);
   assert(buffer_offset < buffer_length);
 
   // Ragel uses: cs, p, pe
-  int cs = parser->saved_cs;               // current ragel machine state
+  int cs = this->saved_cs;                 // current ragel machine state
   const char *p = buffer + buffer_offset;  // pointer to start of data
   const char *pe = buffer + buffer_length; // pointer to end of data
 
   
-#line 95 "http_parser.c"
+#line 69 "http_parser.cc"
 	{
 	if ( p == pe )
 		goto _test_eof;
@@ -123,13 +97,13 @@ cs = 0;
 	goto _out;
 tr0:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st2;
 st2:
 	if ( ++p == pe )
 		goto _test_eof2;
 case 2:
-#line 133 "http_parser.c"
+#line 107 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -147,47 +121,47 @@ case 2:
 tr9:
 #line 30 "http_parser.rl"
 	{
-    req->request_method = HTTP_REQUEST_METHOD_OTHER;
+    request.request_method = REQUEST_METHOD::OTHER;
     ASSIGN_FIELD(request_method_other, p);
   }
 	goto st3;
 tr211:
 #line 29 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_CONNECT; }
+	{ request.request_method = REQUEST_METHOD::CONNECT; }
 	goto st3;
 tr217:
 #line 27 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_DELETE; }
+	{ request.request_method = REQUEST_METHOD::DELETE; }
 	goto st3;
 tr220:
 #line 22 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_GET; }
+	{ request.request_method = REQUEST_METHOD::GET; }
 	goto st3;
 tr224:
 #line 24 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_HEAD; }
+	{ request.request_method = REQUEST_METHOD::HEAD; }
 	goto st3;
 tr231:
 #line 25 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_OPTIONS; }
+	{ request.request_method = REQUEST_METHOD::OPTIONS; }
 	goto st3;
 tr236:
 #line 23 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_POST; }
+	{ request.request_method = REQUEST_METHOD::POST; }
 	goto st3;
 tr238:
 #line 26 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_PUT; }
+	{ request.request_method = REQUEST_METHOD::PUT; }
 	goto st3;
 tr243:
 #line 28 "http_parser.rl"
-	{ req->request_method = HTTP_REQUEST_METHOD_TRACE; }
+	{ request.request_method = REQUEST_METHOD::TRACE; }
 	goto st3;
 st3:
 	if ( ++p == pe )
 		goto _test_eof3;
 case 3:
-#line 191 "http_parser.c"
+#line 165 "http_parser.cc"
 	switch( (*p) ) {
 		case 42: goto tr11;
 		case 43: goto tr12;
@@ -205,13 +179,13 @@ case 3:
 	goto st0;
 tr11:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st4;
 st4:
 	if ( ++p == pe )
 		goto _test_eof4;
 case 4:
-#line 215 "http_parser.c"
+#line 189 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr15;
 		case 35: goto tr16;
@@ -223,7 +197,7 @@ tr15:
 	goto st5;
 tr157:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 20 "http_parser.rl"
 	{ ASSIGN_FIELD(fragment, p); }
 	goto st5;
@@ -239,11 +213,11 @@ tr168:
 	goto st5;
 tr179:
 #line 17 "http_parser.rl"
-	{ parser->mark_query = (byte_pos)(p - buffer); }
+	{ this->mark_query = (BytePos)(p - buffer); }
 #line 39 "http_parser.rl"
 	{
-    req->query.from = parser->mark_query;
-    req->query.to = (byte_pos)(p - buffer);
+    request.query.from = this->mark_query;
+    request.query.to = (BytePos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -251,8 +225,8 @@ tr179:
 tr183:
 #line 39 "http_parser.rl"
 	{
-    req->query.from = parser->mark_query;
-    req->query.to = (byte_pos)(p - buffer);
+    request.query.from = this->mark_query;
+    request.query.to = (BytePos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -261,7 +235,7 @@ st5:
 	if ( ++p == pe )
 		goto _test_eof5;
 case 5:
-#line 265 "http_parser.c"
+#line 239 "http_parser.cc"
 	if ( (*p) == 72 )
 		goto st6;
 	goto st0;
@@ -325,15 +299,15 @@ case 13:
 	goto st0;
 tr56:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st14;
 tr26:
 #line 35 "http_parser.rl"
-	{	req->http_version = 10; }
+	{	request.http_version = 10; }
 	goto st14;
 tr39:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 76 "http_parser.rl"
 	{
     // XXX: What to do with the other headers? call function?
@@ -349,11 +323,11 @@ tr42:
 	goto st14;
 tr66:
 #line 68 "http_parser.rl"
-	{ req->header_connection = HTTP_CONNECTION_CLOSE; }
+	{ request.header_connection = CONNECTION::CLOSE; }
 	goto st14;
 tr76:
 #line 69 "http_parser.rl"
-	{ req->header_connection = HTTP_CONNECTION_KEEP_ALIVE; }
+	{ request.header_connection = CONNECTION::KEEP_ALIVE; }
 	goto st14;
 tr90:
 #line 56 "http_parser.rl"
@@ -361,7 +335,7 @@ tr90:
 	goto st14;
 tr97:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 61 "http_parser.rl"
 	{ ASSIGN_FIELD(header_content_type, p); }
 	goto st14;
@@ -371,7 +345,7 @@ tr100:
 	goto st14;
 tr106:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 66 "http_parser.rl"
 	{ ASSIGN_FIELD(header_cookie, p); }
 	goto st14;
@@ -381,7 +355,7 @@ tr109:
 	goto st14;
 tr115:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 62 "http_parser.rl"
 	{ ASSIGN_FIELD(header_date, p); }
 	goto st14;
@@ -391,7 +365,7 @@ tr118:
 	goto st14;
 tr124:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 63 "http_parser.rl"
 	{ ASSIGN_FIELD(header_host, p); }
 	goto st14;
@@ -401,7 +375,7 @@ tr127:
 	goto st14;
 tr136:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 65 "http_parser.rl"
 	{ ASSIGN_FIELD(header_referer, p); }
 	goto st14;
@@ -411,7 +385,7 @@ tr139:
 	goto st14;
 tr151:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 #line 64 "http_parser.rl"
 	{ ASSIGN_FIELD(header_user_agent, p); }
 	goto st14;
@@ -421,13 +395,13 @@ tr154:
 	goto st14;
 tr155:
 #line 36 "http_parser.rl"
-	{	req->http_version = 11; }
+	{	request.http_version = 11; }
 	goto st14;
 st14:
 	if ( ++p == pe )
 		goto _test_eof14;
 case 14:
-#line 431 "http_parser.c"
+#line 405 "http_parser.cc"
 	if ( (*p) == 10 )
 		goto st15;
 	goto st0;
@@ -479,7 +453,7 @@ case 16:
 tr35:
 #line 81 "http_parser.rl"
 	{
-    req->body_start = (byte_pos)(p - buffer + 1);
+    request.body_start = (BytePos)(p - buffer + 1);
     {p++; cs = 181; goto _out;}
   }
 	goto st181;
@@ -487,17 +461,17 @@ st181:
 	if ( ++p == pe )
 		goto _test_eof181;
 case 181:
-#line 491 "http_parser.c"
+#line 465 "http_parser.cc"
 	goto st0;
 tr29:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st17;
 st17:
 	if ( ++p == pe )
 		goto _test_eof17;
 case 17:
-#line 501 "http_parser.c"
+#line 475 "http_parser.cc"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -524,20 +498,20 @@ case 17:
 	goto st0;
 tr40:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st18;
 tr37:
 #line 71 "http_parser.rl"
 	{
-    parser->field_name.from = parser->mark;
-    parser->field_name.to = (byte_pos)(p - buffer);
+    this->field_name.from = this->mark;
+    this->field_name.to = (BytePos)(p - buffer);
   }
 	goto st18;
 st18:
 	if ( ++p == pe )
 		goto _test_eof18;
 case 18:
-#line 541 "http_parser.c"
+#line 515 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr39;
 		case 32: goto tr40;
@@ -545,25 +519,25 @@ case 18:
 	goto tr38;
 tr38:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st19;
 st19:
 	if ( ++p == pe )
 		goto _test_eof19;
 case 19:
-#line 555 "http_parser.c"
+#line 529 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr42;
 	goto st19;
 tr30:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st20;
 st20:
 	if ( ++p == pe )
 		goto _test_eof20;
 case 20:
-#line 567 "http_parser.c"
+#line 541 "http_parser.cc"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -864,13 +838,13 @@ case 29:
 	goto st0;
 tr57:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st30;
 st30:
 	if ( ++p == pe )
 		goto _test_eof30;
 case 30:
-#line 874 "http_parser.c"
+#line 848 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr56;
 		case 32: goto tr57;
@@ -882,25 +856,25 @@ case 30:
 	goto tr55;
 tr55:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st31;
 st31:
 	if ( ++p == pe )
 		goto _test_eof31;
 case 31:
-#line 892 "http_parser.c"
+#line 866 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto st14;
 	goto st31;
 tr58:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st32;
 st32:
 	if ( ++p == pe )
 		goto _test_eof32;
 case 32:
-#line 904 "http_parser.c"
+#line 878 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto st14;
 		case 76: goto st33;
@@ -946,13 +920,13 @@ case 36:
 	goto st31;
 tr59:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st37;
 st37:
 	if ( ++p == pe )
 		goto _test_eof37;
 case 37:
-#line 956 "http_parser.c"
+#line 930 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto st14;
 		case 69: goto st38;
@@ -1383,25 +1357,25 @@ case 58:
 	goto st0;
 tr89:
 #line 48 "http_parser.rl"
-	{ req->content_length = 0; }
+	{ request.content_length = 0; }
 #line 50 "http_parser.rl"
 	{
-    req->content_length *= 10;
-    req->content_length += ((*p) - '0');
+    request.content_length *= 10;
+    request.content_length += ((*p) - '0');
   }
 	goto st59;
 tr91:
 #line 50 "http_parser.rl"
 	{
-    req->content_length *= 10;
-    req->content_length += ((*p) - '0');
+    request.content_length *= 10;
+    request.content_length += ((*p) - '0');
   }
 	goto st59;
 st59:
 	if ( ++p == pe )
 		goto _test_eof59;
 case 59:
-#line 1405 "http_parser.c"
+#line 1379 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr90;
 	if ( 48 <= (*p) && (*p) <= 57 )
@@ -1527,13 +1501,13 @@ case 63:
 	goto st0;
 tr98:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st64;
 st64:
 	if ( ++p == pe )
 		goto _test_eof64;
 case 64:
-#line 1537 "http_parser.c"
+#line 1511 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr97;
 		case 32: goto tr98;
@@ -1541,13 +1515,13 @@ case 64:
 	goto tr96;
 tr96:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st65;
 st65:
 	if ( ++p == pe )
 		goto _test_eof65;
 case 65:
-#line 1551 "http_parser.c"
+#line 1525 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr100;
 	goto st65;
@@ -1671,13 +1645,13 @@ case 69:
 	goto st0;
 tr107:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st70;
 st70:
 	if ( ++p == pe )
 		goto _test_eof70;
 case 70:
-#line 1681 "http_parser.c"
+#line 1655 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr106;
 		case 32: goto tr107;
@@ -1685,25 +1659,25 @@ case 70:
 	goto tr105;
 tr105:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st71;
 st71:
 	if ( ++p == pe )
 		goto _test_eof71;
 case 71:
-#line 1695 "http_parser.c"
+#line 1669 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr109;
 	goto st71;
 tr31:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st72;
 st72:
 	if ( ++p == pe )
 		goto _test_eof72;
 case 72:
-#line 1707 "http_parser.c"
+#line 1681 "http_parser.cc"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -1820,13 +1794,13 @@ case 75:
 	goto st0;
 tr116:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st76;
 st76:
 	if ( ++p == pe )
 		goto _test_eof76;
 case 76:
-#line 1830 "http_parser.c"
+#line 1804 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr115;
 		case 32: goto tr116;
@@ -1834,25 +1808,25 @@ case 76:
 	goto tr114;
 tr114:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st77;
 st77:
 	if ( ++p == pe )
 		goto _test_eof77;
 case 77:
-#line 1844 "http_parser.c"
+#line 1818 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr118;
 	goto st77;
 tr32:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st78;
 st78:
 	if ( ++p == pe )
 		goto _test_eof78;
 case 78:
-#line 1856 "http_parser.c"
+#line 1830 "http_parser.cc"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -1969,13 +1943,13 @@ case 81:
 	goto st0;
 tr125:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st82;
 st82:
 	if ( ++p == pe )
 		goto _test_eof82;
 case 82:
-#line 1979 "http_parser.c"
+#line 1953 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr124;
 		case 32: goto tr125;
@@ -1983,25 +1957,25 @@ case 82:
 	goto tr123;
 tr123:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st83;
 st83:
 	if ( ++p == pe )
 		goto _test_eof83;
 case 83:
-#line 1993 "http_parser.c"
+#line 1967 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr127;
 	goto st83;
 tr33:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st84;
 st84:
 	if ( ++p == pe )
 		goto _test_eof84;
 case 84:
-#line 2005 "http_parser.c"
+#line 1979 "http_parser.cc"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -2208,13 +2182,13 @@ case 90:
 	goto st0;
 tr137:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st91;
 st91:
 	if ( ++p == pe )
 		goto _test_eof91;
 case 91:
-#line 2218 "http_parser.c"
+#line 2192 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr136;
 		case 32: goto tr137;
@@ -2222,25 +2196,25 @@ case 91:
 	goto tr135;
 tr135:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st92;
 st92:
 	if ( ++p == pe )
 		goto _test_eof92;
 case 92:
-#line 2232 "http_parser.c"
+#line 2206 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr139;
 	goto st92;
 tr34:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st93;
 st93:
 	if ( ++p == pe )
 		goto _test_eof93;
 case 93:
-#line 2244 "http_parser.c"
+#line 2218 "http_parser.cc"
 	switch( (*p) ) {
 		case 33: goto st17;
 		case 58: goto tr37;
@@ -2534,13 +2508,13 @@ case 102:
 	goto st0;
 tr152:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st103;
 st103:
 	if ( ++p == pe )
 		goto _test_eof103;
 case 103:
-#line 2544 "http_parser.c"
+#line 2518 "http_parser.cc"
 	switch( (*p) ) {
 		case 13: goto tr151;
 		case 32: goto tr152;
@@ -2548,13 +2522,13 @@ case 103:
 	goto tr150;
 tr150:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st104;
 st104:
 	if ( ++p == pe )
 		goto _test_eof104;
 case 104:
-#line 2558 "http_parser.c"
+#line 2532 "http_parser.cc"
 	if ( (*p) == 13 )
 		goto tr154;
 	goto st104;
@@ -2577,11 +2551,11 @@ tr169:
 	goto st106;
 tr180:
 #line 17 "http_parser.rl"
-	{ parser->mark_query = (byte_pos)(p - buffer); }
+	{ this->mark_query = (BytePos)(p - buffer); }
 #line 39 "http_parser.rl"
 	{
-    req->query.from = parser->mark_query;
-    req->query.to = (byte_pos)(p - buffer);
+    request.query.from = this->mark_query;
+    request.query.to = (BytePos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -2589,8 +2563,8 @@ tr180:
 tr184:
 #line 39 "http_parser.rl"
 	{
-    req->query.from = parser->mark_query;
-    req->query.to = (byte_pos)(p - buffer);
+    request.query.from = this->mark_query;
+    request.query.to = (BytePos)(p - buffer);
   }
 #line 19 "http_parser.rl"
 	{ ASSIGN_FIELD(request_uri, p); }
@@ -2599,7 +2573,7 @@ st106:
 	if ( ++p == pe )
 		goto _test_eof106;
 case 106:
-#line 2603 "http_parser.c"
+#line 2577 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr157;
 		case 37: goto tr158;
@@ -2615,13 +2589,13 @@ case 106:
 	goto tr156;
 tr156:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st107;
 st107:
 	if ( ++p == pe )
 		goto _test_eof107;
 case 107:
-#line 2625 "http_parser.c"
+#line 2599 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr160;
 		case 37: goto st108;
@@ -2637,13 +2611,13 @@ case 107:
 	goto st107;
 tr158:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st108;
 st108:
 	if ( ++p == pe )
 		goto _test_eof108;
 case 108:
-#line 2647 "http_parser.c"
+#line 2621 "http_parser.cc"
 	if ( (*p) < 65 ) {
 		if ( 48 <= (*p) && (*p) <= 57 )
 			goto st109;
@@ -2668,13 +2642,13 @@ case 109:
 	goto st0;
 tr12:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st110;
 st110:
 	if ( ++p == pe )
 		goto _test_eof110;
 case 110:
-#line 2678 "http_parser.c"
+#line 2652 "http_parser.cc"
 	switch( (*p) ) {
 		case 43: goto st110;
 		case 58: goto st111;
@@ -2693,13 +2667,13 @@ case 110:
 	goto st0;
 tr14:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st111;
 st111:
 	if ( ++p == pe )
 		goto _test_eof111;
 case 111:
-#line 2703 "http_parser.c"
+#line 2677 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr15;
 		case 34: goto st0;
@@ -2740,13 +2714,13 @@ case 113:
 	goto st0;
 tr13:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st114;
 st114:
 	if ( ++p == pe )
 		goto _test_eof114;
 case 114:
-#line 2750 "http_parser.c"
+#line 2724 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr168;
 		case 34: goto st0;
@@ -2795,7 +2769,7 @@ st117:
 	if ( ++p == pe )
 		goto _test_eof117;
 case 117:
-#line 2799 "http_parser.c"
+#line 2773 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr15;
 		case 34: goto st0;
@@ -2843,7 +2817,7 @@ st120:
 	if ( ++p == pe )
 		goto _test_eof120;
 case 120:
-#line 2847 "http_parser.c"
+#line 2821 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr179;
 		case 34: goto st0;
@@ -2858,13 +2832,13 @@ case 120:
 	goto tr178;
 tr178:
 #line 17 "http_parser.rl"
-	{ parser->mark_query = (byte_pos)(p - buffer); }
+	{ this->mark_query = (BytePos)(p - buffer); }
 	goto st121;
 st121:
 	if ( ++p == pe )
 		goto _test_eof121;
 case 121:
-#line 2868 "http_parser.c"
+#line 2842 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr183;
 		case 34: goto st0;
@@ -2879,13 +2853,13 @@ case 121:
 	goto st121;
 tr181:
 #line 17 "http_parser.rl"
-	{ parser->mark_query = (byte_pos)(p - buffer); }
+	{ this->mark_query = (BytePos)(p - buffer); }
 	goto st122;
 st122:
 	if ( ++p == pe )
 		goto _test_eof122;
 case 122:
-#line 2889 "http_parser.c"
+#line 2863 "http_parser.cc"
 	if ( (*p) < 65 ) {
 		if ( 48 <= (*p) && (*p) <= 57 )
 			goto st123;
@@ -3241,13 +3215,13 @@ case 142:
 	goto st0;
 tr2:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st143;
 st143:
 	if ( ++p == pe )
 		goto _test_eof143;
 case 143:
-#line 3251 "http_parser.c"
+#line 3225 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3378,13 +3352,13 @@ case 149:
 	goto st0;
 tr3:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st150;
 st150:
 	if ( ++p == pe )
 		goto _test_eof150;
 case 150:
-#line 3388 "http_parser.c"
+#line 3362 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3496,13 +3470,13 @@ case 155:
 	goto st0;
 tr4:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st156;
 st156:
 	if ( ++p == pe )
 		goto _test_eof156;
 case 156:
-#line 3506 "http_parser.c"
+#line 3480 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3557,13 +3531,13 @@ case 158:
 	goto st0;
 tr5:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st159;
 st159:
 	if ( ++p == pe )
 		goto _test_eof159;
 case 159:
-#line 3567 "http_parser.c"
+#line 3541 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3637,13 +3611,13 @@ case 162:
 	goto st0;
 tr6:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st163;
 st163:
 	if ( ++p == pe )
 		goto _test_eof163;
 case 163:
-#line 3647 "http_parser.c"
+#line 3621 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3774,13 +3748,13 @@ case 169:
 	goto st0;
 tr7:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st170;
 st170:
 	if ( ++p == pe )
 		goto _test_eof170;
 case 170:
-#line 3784 "http_parser.c"
+#line 3758 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -3892,13 +3866,13 @@ case 175:
 	goto st0;
 tr8:
 #line 16 "http_parser.rl"
-	{ parser->mark = (byte_pos)(p - buffer); }
+	{ this->mark = (BytePos)(p - buffer); }
 	goto st176;
 st176:
 	if ( ++p == pe )
 		goto _test_eof176;
 case 176:
-#line 3902 "http_parser.c"
+#line 3876 "http_parser.cc"
 	switch( (*p) ) {
 		case 32: goto tr9;
 		case 36: goto st124;
@@ -4175,48 +4149,56 @@ case 180:
 	_out: {}
 	}
 
-#line 151 "http_parser.rl"
+#line 125 "http_parser.rl"
 
   assert(p <= pe); // buffer overflow after parsing execute
 
-  parser->saved_cs = cs;
+  this->saved_cs = cs;
 
   return (p - buffer); // returns the new buffer offset
 }
 
-bool http_parser_has_error(const struct http_parser *parser) {
-  return (parser->saved_cs == http_parser_error);
+bool
+Parser::has_error()
+{
+  return (this->saved_cs == http_parser_error);
 }
 
-bool http_parser_is_finished(const struct http_parser *parser) {
-  return (parser->saved_cs >= http_parser_first_final);
+bool
+Parser::is_finished()
+{
+  return (this->saved_cs >= http_parser_first_final);
 }
 
-bool http_request_is_keep_alive(struct http_request *req) {
-  switch (req->http_version) {
+bool
+Request::is_keep_alive()
+{
+  switch (this->http_version) {
     case 10:
-      if (req->header_connection != HTTP_CONNECTION_KEEP_ALIVE) return false;
+      if (this->header_connection != CONNECTION::KEEP_ALIVE) return false;
       break;
     case 11:
-      if (req->header_connection == HTTP_CONNECTION_CLOSE) return false;
+      if (this->header_connection == CONNECTION::CLOSE) return false;
       break;
     default:
       assert(false);
       return false;
   };
 
-  switch (req->request_method) {
-    case HTTP_REQUEST_METHOD_HEAD:
-    case HTTP_REQUEST_METHOD_GET:
+  switch (this->request_method) {
+    case REQUEST_METHOD::HEAD:
+    case REQUEST_METHOD::GET:
       return true;
       break;
 
-    case HTTP_REQUEST_METHOD_POST:
-    case HTTP_REQUEST_METHOD_PUT:
-      return (req->content_length >= 0);
+    case REQUEST_METHOD::POST:
+    case REQUEST_METHOD::PUT:
+      return (this->content_length >= 0);
       break;
     // XXX
   };
 
   return false;
 }
+
+}; // namespace HTTP
